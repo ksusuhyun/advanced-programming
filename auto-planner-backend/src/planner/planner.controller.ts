@@ -1,23 +1,23 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { GeneratePlanDto } from './dto/generate-plan.dto';
+import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { PlannerService } from './planner.service';
 import { ConfirmPlanDto } from './dto/confirm-plan.dto';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('planner')
 @Controller('planner')
 export class PlannerController {
   constructor(private readonly plannerService: PlannerService) {}
 
-  @Post('generate')
-  @ApiOperation({ summary: '공부 계획 생성 요청' })
-  generatePlan(@Body() dto: GeneratePlanDto) {
-    return this.plannerService.generatePlan(dto);
+  @Post(':id/confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiParam({ name: 'id', description: '확정할 계획 ID' })
+  @ApiOperation({ summary: '공부 계획 확정 및 Notion 연동 (mock)' })
+  confirmPlan(
+    @Param('id') id: string,
+    @Body() dto: ConfirmPlanDto,
+  ) {
+    return this.plannerService.confirmPlan(id, dto);
   }
-
-  @Post('confirm')
-    @ApiOperation({ summary: '공부 계획 확정 및 Notion 전송' })
-    confirmPlan(@Body() dto: ConfirmPlanDto) {
-    return this.plannerService.confirmPlan(dto);
-    }
 }
