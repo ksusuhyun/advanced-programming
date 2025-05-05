@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { GeneratePlanDto } from './dto/generate-plan.dto';
 import { ConfirmPlanDto } from './dto/confirm-plan.dto';
+import { NotionService } from 'src/notion/notion.service';
 
 @Injectable()
 export class PlannerService {
+  constructor(
+    private readonly notionService: NotionService 
+  ) {}
+
   generatePlan(dto: GeneratePlanDto) {
     const prompt = this._generatePrompt(dto);
 
@@ -24,16 +29,39 @@ export class PlannerService {
     `;
   }
 
-  confirmPlan(planId: string, dto: ConfirmPlanDto) {
-    console.log('planId:', planId);         // 디버깅
-    console.log('dto:', dto);               // 디버깅
+  async confirmPlan(id: string, dto: ConfirmPlanDto) {
+    for (const entry of dto.dailyPlan) {
+      const [date, content] = entry.split(':').map(v => v.trim());
+  
+      const [month, day] = date.split('/');
+      const paddedMonth = month.padStart(2, '0');
+      const paddedDay = day.padStart(2, '0');
+      const formattedDate = `2025-${paddedMonth}-${paddedDay}`;
+  
+      await this.notionService.addPlanEntry({
+        userId: dto.userId,
+        subject: dto.subject,
+        date: formattedDate, 
+        content: content,
+      });
+    }
   
     return {
-      message: '공부 계획이 확정되었습니다.',
-      syncedPlanId: planId,
-      data: dto,
+      message: '공부 계획이 Notion에 연동되었습니다.',
+      daysAdded: dto.dailyPlan.length,
     };
   }
+  
+  // confirmPlan(planId: string, dto: ConfirmPlanDto) {
+  //   console.log('planId:', planId);         // 디버깅
+  //   console.log('dto:', dto);               // 디버깅
+  
+  //   return {
+  //     message: '공부 계획이 확정되었습니다.',
+  //     syncedPlanId: planId,
+  //     data: dto,
+  //   };
+  // }
   
   // confirmPlan(planId: string, dto: ConfirmPlanDto) {
   //   // 실제 Notion API 호출은 아직 구현하지 않음
