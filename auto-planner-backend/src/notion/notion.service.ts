@@ -1,14 +1,20 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config'; // ✅ 추가
 import { Client } from '@notionhq/client';
 import { SyncToNotionDto } from './dto/sync-to-notion.dto';
 
 @Injectable()
 export class NotionService {
-  private notion = new Client({
-    auth: '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', // 실제 코드에서는 .env 사용 권장
-  });
+  private notion: Client;
+  private databaseId: string;
 
-  private databaseId = '1ea4fa76f8688090ae04fed52a6e3ca7';
+  constructor(private configService: ConfigService) {
+    this.notion = new Client({
+      auth: this.configService.get<string>('NOTION_TOKEN'), // ✅ .env에서 토큰 불러오기
+    });
+
+    this.databaseId = this.configService.get<string>('DATABASE_ID') ?? 'default-id';
+  }
 
   async addPlanEntry(data: {
     userId: string;
