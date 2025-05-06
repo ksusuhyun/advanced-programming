@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ChapterInfoDto } from 'src/exam/dto/chapter-info.dto';
+import { ChapterInfoDto } from '../../exam/dto/chapter-info.dto';
 
 export class GeneratePlanDto {
   @ApiProperty({ example: 'user123' })
