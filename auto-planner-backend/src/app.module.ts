@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config'; // ✅ 추가
+import { ConfigModule } from '@nestjs/config'; 
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -11,7 +11,7 @@ import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }), // ✅ 환경변수 설정을 전역으로 불러오기
+    ConfigModule.forRoot({ isGlobal: true }), 
     UserModule,
     ExamModule,
     PlannerModule,
