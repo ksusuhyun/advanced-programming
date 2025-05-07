@@ -3,7 +3,7 @@ import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
-import { UserModule } from 'src/user/user.module'; // 👈 추가
+import { UserModule } from 'src/user/user.module'; 
 import { JwtStrategy } from './strategy/jwt.strategy';
 
 @Module({
