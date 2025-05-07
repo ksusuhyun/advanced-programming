@@ -1,5 +1,5 @@
 {
-  "extends": "./tsconfig.base.json",
+  // "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "module": "commonjs",
     "declaration": true,
@@ -10,10 +10,11 @@
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl": "./src",
+    "baseUrl": "./",
     "paths": {
-      "*": ["*"],
-      "exam/*": ["exam/*"]
+      // "*": ["*"],
+      // "exam/*": ["exam/*"],
+      "src/*": ["src/*"]
     },
     "incremental": true,
     "skipLibCheck": true,
