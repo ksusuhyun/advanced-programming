@@ -4,7 +4,7 @@ export class ConfirmPlanDto {
   @ApiProperty({ example: 'user123' })
   userId: string;
 
-  @ApiProperty({ example: '수학' })
+  @ApiProperty({ example: '고급 프로그래밍' })
   subject: string;
 
   @ApiProperty({ example: '2025-06-01' })
