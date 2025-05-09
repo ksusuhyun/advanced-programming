@@ -1,10 +1,8 @@
-<<<<<<< HEAD
-node_modules
-node_modules
-=======
+# Node modules
+node_modules/
+
 # compiled output
 /dist
-/node_modules
 /build
 
 # Logs
@@ -56,6 +54,5 @@ pids
 *.seed
 *.pid.lock
 
-# Diagnostic reports (https://nodejs.org/api/report.html)
+# Diagnostic reports
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
->>>>>>> 535e334a (feat : Hugging Face 기반 학습 계획 자동 생성 기능 및 Notion 연동 수정 + 사용자 preference 모듈 추가)
