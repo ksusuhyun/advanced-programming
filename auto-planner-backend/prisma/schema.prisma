@@ -12,19 +12,18 @@ model StudyPreference {
   style          String
   studyDays      String[]
   sessionsPerDay Int
-  user           User     @relation(fields: [userId], references: [id])
   userId         Int      @unique
+  user           User     @relation(fields: [userId], references: [id])
 }
 
 model User {
-  id               Int              @id @default(autoincrement())
-  userId           String           @unique
-  password         String
-  tokenFreeLogin   Boolean          @default(true)
-  createdAt        DateTime         @default(now())
-
-  preference       StudyPreference?
-  exams            Exam[]           // ✅ 추가된 필드
+  id             Int              @id @default(autoincrement())
+  userId         String           @unique
+  password       String
+  tokenFreeLogin Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  exams          Exam[]
+  preference     StudyPreference?
 }
 
 model Exam {
@@ -33,23 +32,20 @@ model Exam {
   startDate  DateTime
   endDate    DateTime
   importance Int
-
-  user       User      @relation(fields: [userId], references: [id])
-  userId     Int       // FK
-
-  chapters   Chapter[]
+  userId     Int
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  chapters   Chapter[]
+  user       User      @relation(fields: [userId], references: [id])
 }
 
-
 model Chapter {
-  id            Int       @id @default(autoincrement())
-  exam          Exam      @relation(fields: [examId], references: [id])
+  id            Int      @id @default(autoincrement())
   examId        Int
   chapterTitle  String
   difficulty    Int
   contentVolume Int
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  exam          Exam     @relation(fields: [examId], references: [id])
 }

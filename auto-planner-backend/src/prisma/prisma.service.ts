@@ -1,3 +1,5 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
 // src/prisma/prisma.service.ts
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
@@ -13,3 +15,4 @@ export class PrismaService extends PrismaClient
     await this.$disconnect();
   }
 }
+
