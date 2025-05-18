@@ -2,6 +2,7 @@
   import { UserRound, CalendarCheck } from 'lucide-svelte';
   import { goto } from '$app/navigation';
   import { checkUserExists } from '$lib/api/user';
+  import { signupUser } from '$lib/api/user';
 
   let userId = '';
   let password = '';
@@ -67,37 +68,70 @@ async function checkDuplicate() {
     passwordMismatch = confirmPassword.length > 0 && password !== confirmPassword;
   }
 
-  function handleSignup() {
+  async function handleSignup() {
     if (!userId) {
       missingField = 'userId';
       modalMessage = '아이디는 필수 입력 사항입니다.';
       showModal = true;
       return;
     }
+
     if (!password) {
       missingField = 'password';
       modalMessage = '비밀번호는 필수 입력 사항입니다.';
       showModal = true;
       return;
     }
+
     if (!confirmPassword) {
       missingField = 'confirmPassword';
       modalMessage = '비밀번호 확인은 필수 입력 사항입니다.';
       showModal = true;
       return;
     }
+
+    // ✅ 비밀번호 유효성 검사 추가
+    if (!validatePassword(password)) {
+      passwordError = true;
+      passwordTouched = true;
+      modalMessage = '비밀번호 조건을 확인해주세요.';
+      showModal = true;
+      return;
+    }
+
     if (duplicateStatus !== 'available') {
       missingField = null;
       modalMessage = '아이디 중복 확인을 해주세요.';
       showModal = true;
       return;
     }
+
+    if (password !== confirmPassword) {
+      passwordMismatch = true;
+
+      // ✅ 모달로 사용자에게 알림
+      modalMessage = '비밀번호가 일치하지 않습니다. 다시 확인해주세요.';
+      showModal = true;
+
+      return;
+    }
+
     if (password !== confirmPassword) {
       passwordMismatch = true;
       return;
     }
-    alert('가입이 완료되었습니다!');
+
+    try {
+      await signupUser({ userId, password });
+      alert('가입이 완료되었습니다!');
+      goto('/');
+    } catch (e) {
+      modalMessage = e.message;
+      showModal = true;
+    }
   }
+
+
 
   function handleModalConfirm() {
     showModal = false;
