@@ -12,3 +12,25 @@ export async function checkUserExists(userId: string): Promise<boolean> {
     throw new Error('네트워크 오류');
   }
 }
+
+
+export async function signupUser({ userId, password }) {
+  const res = await fetch('https://advanced-programming.onrender.com/user', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      userId,
+      password,
+      studyPreference: '알수없음'  // 백엔드가 요구한다면 필수
+    })
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.message || '회원가입 실패');
+  }
+
+  return await res.json();
+}
