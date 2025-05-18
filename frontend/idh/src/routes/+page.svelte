@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { UserRound, CalendarCheck } from 'lucide-svelte';
+  import { CalendarCheck, UserRound } from 'lucide-svelte';
   import { goto } from '$app/navigation';
   import { login } from '$lib/api/auth';
 
@@ -36,22 +36,48 @@
     height: 100vh;
     background-color: #f3f4f6;
   }
-  .header {
+
+  header {
+    background-color: white;
+    border-bottom: 1px solid #e5e7eb;
+    height: 64px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box;
+  }
+
+  .header-container {
+    width: 100%;
+    max-width: 1280px;
+    padding: 0 24px;
     display: flex;
     align-items: center;
-    padding: 1rem 2rem;
-    border-bottom: 1px solid #e5e7eb;
-    font-weight: bold;
-    font-size: 1.2rem;
-    gap: 0.5rem;
-    color: #1f2937;
+    justify-content: space-between;
+    box-sizing: border-box;
   }
+
+  .logo-section {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .logo-text {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 1.25rem;
+    color: #1f2937;
+    line-height: 1;
+  }
+
   .content {
     flex: 1;
     display: flex;
     justify-content: center;
     align-items: center;
   }
+
   .login-box {
     background: white;
     padding: 2rem;
@@ -63,6 +89,7 @@
     display: flex;
     flex-direction: column;
   }
+
   .icon-wrapper {
     width: 96px;
     height: 96px;
@@ -73,21 +100,25 @@
     justify-content: center;
     margin: 0 auto 1rem;
   }
+
   .login-box h2 {
     font-size: 1.25rem;
     margin-bottom: 0.25rem;
   }
+
   .login-box p {
     font-size: 0.875rem;
     color: #6b7280;
     margin-bottom: 1.5rem;
   }
+
   .login-box label {
     display: block;
     text-align: left;
     font-weight: 500;
     margin-bottom: 0.25rem;
   }
+
   input[type="text"],
   input[type="password"] {
     width: 100%;
@@ -96,9 +127,11 @@
     border: 1px solid #ccc;
     border-radius: 4px;
   }
+
   input::placeholder {
     color: #adaebc;
   }
+
   .error {
     color: #dc2626;
     font-size: 0.85rem;
@@ -107,12 +140,14 @@
     margin-bottom: 0.5rem;
     height: 1.5rem;
   }
+
   .options {
     display: flex;
     justify-content: flex-end;
     font-size: 0.875rem;
     margin-bottom: 1rem;
   }
+
   button {
     background-color: #1f2937;
     color: white;
@@ -124,14 +159,17 @@
     margin-bottom: 1rem;
     cursor: pointer;
   }
+
   .divider {
     height: 1px;
     background-color: #e5e7eb;
     margin: 1rem 0;
   }
+
   .footer {
     font-size: 0.875rem;
   }
+
   .footer a {
     display: block;
     color: #1f2937;
@@ -142,10 +180,14 @@
 </style>
 
 <div class="wrapper">
-  <div class="header">
-    <CalendarCheck color="#1f2937" size={28} />
-    <span style="font-weight: 600; font-size: 1.25rem; color: #1f2937;">AutoPlanner</span>
-  </div>
+  <header>
+    <div class="header-container">
+      <div class="logo-section">
+        <CalendarCheck color="#1f2937" size={28} />
+        <span class="logo-text">AutoPlanner</span>
+      </div>
+    </div>
+  </header>
 
   <div class="content">
     <div class="login-box" on:keydown={handleKeydown}>
@@ -176,9 +218,7 @@
         {/if}
       </div>
 
-      <div class="options">
-        <span style="cursor:pointer; text-decoration: underline; color: #1f2937;"></span>
-      </div>
+      <div class="options"></div>
 
       <button on:click={handleLogin}>로그인</button>
 
