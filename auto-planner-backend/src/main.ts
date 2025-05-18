@@ -37,6 +37,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+    // ✅ CORS 설정 추가 (프론트에서 요청 허용)
+    app.enableCors({
+      origin: ['http://localhost:5173', 'https://advanced-programming.onrender.com'],
+      credentials: true,
+    });  
+
   const config = new DocumentBuilder()
     .setTitle('AI Planner API')
     .setDescription('AI 기반 시험 계획 생성기')
