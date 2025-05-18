@@ -1,6 +1,7 @@
 <script>
   import { UserRound, CalendarCheck } from 'lucide-svelte';
   import { goto } from '$app/navigation';
+  import { checkUserExists } from '$lib/api/user';
 
   let userId = '';
   let password = '';
@@ -18,9 +19,39 @@
   let passwordInput;
   let confirmPasswordInput;
 
-  function checkDuplicate() {
-    duplicateStatus = userId === 'user123' ? 'unavailable' : 'available';
+
+let flashMessage = false;
+
+async function checkDuplicate() {
+  if (!userId.trim()) return;
+
+  try {
+    const exists = await checkUserExists(userId);
+    const newStatus = exists ? 'unavailable' : 'available';
+
+    if (duplicateStatus !== newStatus) {
+      flashMessage = true;
+      duplicateStatus = null; // 잠시 숨기기
+      setTimeout(() => {
+        duplicateStatus = newStatus;
+        flashMessage = false;
+      }, 50); // 깜빡임 효과용 짧은 지연
+    } else {
+      // 동일한 상태일 경우에도 효과 주기
+      flashMessage = true;
+      duplicateStatus = null;
+      setTimeout(() => {
+        duplicateStatus = newStatus;
+        flashMessage = false;
+      }, 50);
+    }
+
+  } catch (e) {
+    modalMessage = e.message || '중복 확인 중 오류가 발생했습니다.';
+    showModal = true;
   }
+}
+
 
   function validatePassword(pw) {
     return /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/.test(pw);
@@ -346,15 +377,20 @@
             />
             <button class="duplicate-check" on:click={checkDuplicate}>중복확인</button>
           </div>
-          <div class="msg-area">
-            {#if duplicateStatus === 'available'}
-              <span class="status-message">사용 가능한 아이디입니다</span>
-            {:else if duplicateStatus === 'unavailable'}
-              <span class="status-message fail">이미 사용 중인 아이디입니다</span>
-            {:else}
-              <span class="status-message hidden">&nbsp;</span>
-            {/if}
-          </div>
+            <div class="msg-area">
+              {#if duplicateStatus === 'available'}
+                <span class="status-message {flashMessage ? 'blink' : ''}">
+                  사용 가능한 아이디입니다
+                </span>
+              {:else if duplicateStatus === 'unavailable'}
+                <span class="status-message fail {flashMessage ? 'blink' : ''}">
+                  이미 사용 중인 아이디입니다
+                </span>
+              {:else}
+                <span class="status-message hidden">&nbsp;</span>
+              {/if}
+            </div>
+
         </div>
 
         <!-- 비밀번호 -->
