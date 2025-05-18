@@ -11,13 +11,13 @@
 
   async function handleLogin() {
     try {
-      const result = await login({ id: userId, password });
+      const result = await login({ userId, password }); // ✅ userId 키 사용
       localStorage.setItem('token', result.access_token);
       loginError = false;
       goto('/main');
     } catch (e) {
       loginError = true;
-      errorMessage = e.message;
+      errorMessage = e.message || '로그인에 실패했습니다.';
       userId = '';
       password = '';
       userIdInput?.focus();
@@ -209,7 +209,11 @@
       </div>
       <div>
         <label>비밀번호</label>
-        <input type="password" bind:value={password} placeholder="비밀번호를 입력하세요" />
+        <input
+          type="password"
+          bind:value={password}
+          placeholder="비밀번호를 입력하세요"
+        />
       </div>
 
       <div class="error">
@@ -217,8 +221,6 @@
           {errorMessage || '아이디 또는 비밀번호가 일치하지 않습니다.'}
         {/if}
       </div>
-
-      <div class="options"></div>
 
       <button on:click={handleLogin}>로그인</button>
 
