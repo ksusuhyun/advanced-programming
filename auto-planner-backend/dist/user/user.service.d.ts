@@ -16,7 +16,7 @@ export declare class UserService {
         id: number;
         tokenFreeLogin: boolean;
         createdAt: Date;
-    } | null>;
+    }>;
     findAll(): Promise<{
         userId: string;
         password: string;
