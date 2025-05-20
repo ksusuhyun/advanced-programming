@@ -25,6 +25,7 @@
   }
 </script>
 
+<!-- 
 <script lang="ts">
   import { checkNotionConnected, getNotionAuthUrl } from '$lib/api/notion';
 
@@ -43,7 +44,7 @@
       alert(err.message || '노션 연동 중 오류가 발생했습니다.');
     }
   }
-</script>
+</script> -->
 
 
 
