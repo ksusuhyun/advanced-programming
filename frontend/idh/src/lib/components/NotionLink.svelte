@@ -1,4 +1,4 @@
-<script lang="ts">
+<!-- <script lang="ts">
   import { requestNotionRedirect } from '$lib/api/notion';
 
   async function handleNotionConnect() {
@@ -8,7 +8,44 @@
       alert(err.message || '노션 연동 중 오류가 발생했습니다.');
     }
   }
+</script> -->
+
+<!-- 새 창으로 열리도록 수정 -->
+<script lang="ts">
+  import { getNotionAuthUrl } from '$lib/api/notion';
+
+  async function handleNotionConnect() {
+    try {
+      const url = await getNotionAuthUrl();
+      // 새 창에서 열기
+      window.open(url, '_blank', 'width=600,height=700');
+    } catch (err) {
+      alert(err.message || '노션 연동 중 오류가 발생했습니다.');
+    }
+  }
 </script>
+
+<script lang="ts">
+  import { checkNotionConnected, getNotionAuthUrl } from '$lib/api/notion';
+
+  async function handleNotionConnect() {
+    try {
+      const alreadyConnected = await checkNotionConnected();
+
+      if (alreadyConnected) {
+        alert('✅ 이미 노션과 연동된 사용자입니다.');
+        return;
+      }
+
+      const authUrl = await getNotionAuthUrl();
+      window.open(authUrl, '_blank', 'width=600,height=700');
+    } catch (err) {
+      alert(err.message || '노션 연동 중 오류가 발생했습니다.');
+    }
+  }
+</script>
+
+
 
 <div class="notion-link-container">
   <div class="header-section">
