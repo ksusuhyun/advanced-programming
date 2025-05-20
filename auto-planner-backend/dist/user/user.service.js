@@ -26,7 +26,11 @@ let UserService = class UserService {
         });
     }
     async findOne(userId) {
-        return this.prisma.user.findUnique({ where: { userId } });
+        const user = await this.prisma.user.findUnique({ where: { userId } });
+        if (!user) {
+            throw new common_1.NotFoundException('해당 사용자를 찾을 수 없습니다.');
+        }
+        return user;
     }
     async findAll() {
         return this.prisma.user.findMany();

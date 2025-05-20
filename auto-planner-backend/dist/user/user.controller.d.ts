@@ -16,7 +16,7 @@ export declare class UserController {
         id: number;
         tokenFreeLogin: boolean;
         createdAt: Date;
-    } | null>;
+    }>;
     getAllUsers(): Promise<{
         userId: string;
         password: string;

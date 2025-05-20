@@ -33,6 +33,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { saveToken } from './auth/notion-token.store'; // ✅ 추가
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -62,6 +63,9 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
+
+  // ✅ 테스트용 Notion 토큰 등록
+  saveToken('202255150', 'secret_abc123456yournotiontoken');  
 
   // ✅ Render 호환을 위한 포트 설정
   await app.listen(process.env.PORT || 4523, '0.0.0.0');

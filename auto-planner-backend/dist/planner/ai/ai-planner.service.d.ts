@@ -11,4 +11,5 @@ export declare class AiPlannerService {
     generateStudyPlanByUserId(userId: string): Promise<any>;
     private createPrompt;
     private optimizeResponse;
+    private convertToNotionFormat;
 }
