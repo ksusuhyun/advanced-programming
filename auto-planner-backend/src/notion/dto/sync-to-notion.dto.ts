@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SyncToNotionDto {
-  @ApiProperty({ example: 'user123' })
-  userId: string;
+  // @ApiProperty({ example: 'user123' })
+  // userId: string;
 
   @ApiProperty({ example: '수학' })
   subject: string;
