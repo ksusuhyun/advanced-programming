@@ -40,7 +40,7 @@ export class PlannerService {
       const formattedDate = `2025-${paddedMonth}-${paddedDay}`;
   
       await this.notionService.addPlanEntry({
-        userId: dto.userId,
+        // userId: dto.userId,
         subject: dto.subject,
         date: formattedDate, 
         content: content,

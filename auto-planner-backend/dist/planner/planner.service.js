@@ -42,7 +42,6 @@ let PlannerService = class PlannerService {
             const paddedDay = day.padStart(2, '0');
             const formattedDate = `2025-${paddedMonth}-${paddedDay}`;
             await this.notionService.addPlanEntry({
-                userId: dto.userId,
                 subject: dto.subject,
                 date: formattedDate,
                 content: content,
