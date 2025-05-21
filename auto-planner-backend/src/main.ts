@@ -40,7 +40,7 @@ async function bootstrap() {
 
     // ✅ CORS 설정 추가 (프론트에서 요청 허용)
     app.enableCors({
-      origin: ['http://localhost:5173', 'https://advanced-programming.onrender.com'],
+      origin: ['http://localhost:5173', 'https://advanced-programming.onrender.com', 'http://localhost:5174'],
       credentials: true,
     });  
 

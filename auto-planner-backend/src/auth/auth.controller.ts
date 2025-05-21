@@ -5,6 +5,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import axios from 'axios';
 import { saveToken } from './notion-token.store';
+import { Logger } from '@nestjs/common';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -69,7 +70,10 @@ export class AuthController {
 
       // ✅ 토큰 저장 (임시 store 또는 DB)
       saveToken(userId, access_token);
+      console.log('✅ saveToken 실행됨!');
       console.log(`[✅ Notion 연동 완료] userId: ${userId}, token: ${access_token}`);
+      
+
 
       return res.send('Notion 연동이 완료되었습니다! 이 창은 닫아도 됩니다.');
     } catch (error) {

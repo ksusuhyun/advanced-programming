@@ -19,6 +19,7 @@ const login_dto_1 = require("./dto/login.dto");
 const swagger_1 = require("@nestjs/swagger");
 const axios_1 = require("axios");
 const notion_token_store_1 = require("./notion-token.store");
+const common_2 = require("@nestjs/common");
 let AuthController = class AuthController {
     authService;
     constructor(authService) {
@@ -36,6 +37,8 @@ let AuthController = class AuthController {
         return res.send(notionOAuthUrl);
     }
     async handleNotionCallback(code, userId, res) {
+        common_2.Logger.log('✅ 콜백 함수 진입', 'AuthController');
+        console.log('✅ 콜백 함수 도달');
         const clientId = process.env.NOTION_CLIENT_ID;
         const clientSecret = process.env.NOTION_CLIENT_SECRET;
         const redirectUri = process.env.NOTION_REDIRECT_URI;
@@ -56,6 +59,7 @@ let AuthController = class AuthController {
             const access_token = tokenResponse.data.access_token;
             const workspace_id = tokenResponse.data.workspace_id;
             (0, notion_token_store_1.saveToken)(userId, access_token);
+            console.log('✅ saveToken 실행됨!');
             console.log(`[✅ Notion 연동 완료] userId: ${userId}, token: ${access_token}`);
             return res.send('Notion 연동이 완료되었습니다! 이 창은 닫아도 됩니다.');
         }

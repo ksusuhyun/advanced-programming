@@ -18,20 +18,43 @@
 //   }
 // }
 
+// import { Injectable } from '@nestjs/common';
+// import { PassportStrategy } from '@nestjs/passport';
+// import { ExtractJwt, Strategy } from 'passport-jwt';
+
+// @Injectable()
+// export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
+//   constructor() {
+//     super({
+//       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+//       secretOrKey: 'secret', // 👈 현재는 하드코딩된 키에 맞춤
+      
+//     });
+//   }
+
+//   async validate(payload: any) {
+//     return { userId: payload.sub }; // 로그인 응답에서 sub로 넘겼다면 이렇게
+//   }
+// }
+
+
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  constructor() {
+  constructor(private configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: 'secret', // 👈 현재는 하드코딩된 키에 맞춤
+      secretOrKey: configService.get<string>('JWT_SECRET'),
+      ignoreExpiration: false,
     });
   }
 
   async validate(payload: any) {
-    return { userId: payload.sub }; // 로그인 응답에서 sub로 넘겼다면 이렇게
+    console.log('[DEBUG] JwtStrategy.validate 실행됨:', payload);
+    return { userId: payload.sub }; // 또는 전체 payload 반환 가능
   }
 }
