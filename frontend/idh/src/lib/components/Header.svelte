@@ -10,8 +10,12 @@
       <span class="logo-text">AutoPlanner</span>
     </div>
     <nav class="navigation-section">
-      <a href="/calendar" class="nav-item">캘린더</a>
-      <a href="/profile" class="nav-item profile-item">프로필</a>
+      <a class="nav-link" on:click={() => goto('/main')}>메인화면</a>
+
+      <!-- ✅ 프로필 이미지 또는 아이콘 영역 -->
+      <div class="profile-section">
+        <div class="profile-image-placeholder"></div>
+      </div>
     </nav>
   </div>
 </header>
@@ -73,4 +77,17 @@
     color: #1f2937;
     text-decoration: underline;
   }
+
+  .profile-section {
+    display: flex;
+    align-items: center;
+  }
+
+  .profile-image-placeholder {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #d1d5db; /* 회색 배경 */
+  }
+
 </style>
