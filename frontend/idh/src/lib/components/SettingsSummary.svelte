@@ -4,12 +4,14 @@
   export let studyDays: string[];
   export let studySessions: number;
 
+  import { goto } from '$app/navigation';
+
   function handleEditSettings() {
-    console.log('Edit settings clicked');
+    goto('/userpreference');
   }
 
   function handleStartPlan() {
-    console.log('Start plan clicked');
+    goto('/exam');
   }
 </script>
 
