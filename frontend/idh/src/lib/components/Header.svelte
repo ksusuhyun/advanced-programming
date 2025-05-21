@@ -10,7 +10,7 @@
       <span class="logo-text">AutoPlanner</span>
     </div>
     <nav class="navigation-section">
-      <a href="/calendar" class="nav-item">캘린더</a>
+      <a href="/calendar" class="nav-item">메인화면</a>
       <a href="/profile" class="nav-item profile-item">프로필</a>
     </nav>
   </div>
