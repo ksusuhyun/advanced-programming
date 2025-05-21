@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ConfirmPlanDto {
-  @ApiProperty({ example: 'user123' })
+  @ApiProperty({ example: '202255179' })
   userId: string;
 
   @ApiProperty({ example: '고급 프로그래밍' })
@@ -16,6 +16,6 @@ export class ConfirmPlanDto {
   @ApiProperty({ example: ['6/1: Chapter 1', '6/2: Chapter 2'] })
   dailyPlan: string[];
 
-  @ApiProperty({ example: "1ea4fa76f8688090ae04fed52a6e3ca7" })
+  @ApiProperty({ example: "1f462039491480a48452f3bd7436ffd2" })
   databaseId: string;
 }
