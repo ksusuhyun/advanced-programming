@@ -1,6 +1,6 @@
 <script>
   import Header from '$lib/components/Header.svelte';
-  import MainSection from '$/lib/components/MainSection.svelte';
+  import MainSection from '$lib/components/MainSection.svelte';
 </script>
 
 <div class="main-wrapper">

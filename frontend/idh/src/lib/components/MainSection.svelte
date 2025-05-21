@@ -1,30 +1,45 @@
-<script>
-  // 사용자가 선택하기 전 처음 화면에 뜨는 기본값 설정
-  let learningStyle = 'focus'; // 'focus' or 'parallel'
-  let studyDays = {
-    mon: false,
-    tue: false,
-    wed: false,
-    thu: false,
-    fri: false,
-    sat: false,
-    sun: false,
+<script lang="ts">
+  import { saveUserPreference } from '$lib/api/userPreference';
+
+  let userId = 'user123';
+
+  let learningStyle: 'focus' | 'parallel' = 'focus';
+  let studyDays: { [key: string]: boolean } = {
+    mon: false, tue: false, wed: false,
+    thu: false, fri: false, sat: false, sun: false,
   };
   let studySessions = 5;
 
-  function toggleDay(day) {
+  function toggleDay(day: string) {
     studyDays[day] = !studyDays[day];
   }
 
-  function handleSubmit() {
-    console.log('Form Submitted', {
-      learningStyle,
-      studyDays,
-      studySessions,
-    });
-    // 실제 저장 로직 추가
+  async function handleSubmit() {
+    const dayMap: { [key: string]: string } = {
+      mon: '월', tue: '화', wed: '수',
+      thu: '목', fri: '금', sat: '토', sun: '일',
+    };
+
+    const selectedDays = Object.entries(studyDays)
+      .filter(([_, selected]) => selected)
+      .map(([key]) => dayMap[key]);
+
+    const body = {
+      style: learningStyle,
+      studyDays: selectedDays,
+      sessionsPerDay: studySessions,
+    };
+
+    try {
+      await saveUserPreference(userId, body);
+      alert('✅ 설정이 저장되었습니다!');
+    } catch (err) {
+      console.error(err);
+      alert('⚠️ 설정 저장 실패!');
+    }
   }
 </script>
+
 
 <section class="main-section-container">
   <div class="content-card">
@@ -41,7 +56,7 @@
         <p class="group-title" id="learning-style-label">학습 스타일 선택</p>
         <div class="radio-group" role="radiogroup" aria-labelledby="learning-style-label">
           <label class="radio-label">
-            <input type="radio" name="learningStyle" value="concentrate" bind:group={learningStyle}>
+            <input type="radio" name="learningStyle" value="focus" bind:group={learningStyle}>
             <span>하루 한 과목 집중</span>
           </label>
           <label class="radio-label">
@@ -74,7 +89,7 @@
         </div>
       </div>
 
-      <button type="submit" class="save-button">설정 저장</button>
+      <button type="submit" class="save-button" on:click={handleSubmit}>설정 저장</button>
     </form>
   </div>
 </section>

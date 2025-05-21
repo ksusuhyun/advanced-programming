@@ -18,7 +18,7 @@
   </div>
   <h2 class="card-title">나의 정보 확인하기</h2>
   <p class="card-description">학습 선호도와 시험 정보를 확인하고 관리하세요</p>
-  <button class="card-button">
+  <button class="card-button" on:click={handleGoToPreference}>
     <span class="button-text">정보 확인</span>
     <!-- Figma 노드 6:547 (svg)에 해당하는 아이콘. 간단한 화살표로 대체 -->
     <span class="button-icon">→</span>
