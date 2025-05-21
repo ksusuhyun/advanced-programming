@@ -12,10 +12,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AiPlannerService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
-const axios_1 = require("axios");
 const user_preference_service_1 = require("../../user-preference/user-preference.service");
 const exam_service_1 = require("../../exam/exam.service");
 const notion_service_1 = require("../../notion/notion.service");
+const axios_1 = require("axios");
 let AiPlannerService = class AiPlannerService {
     configService;
     userPreferenceService;
@@ -43,13 +43,34 @@ let AiPlannerService = class AiPlannerService {
                 },
             });
             const rawText = response.data?.[0]?.generated_text || response.data;
-            const parsed = JSON.parse(rawText);
+            console.log('📋 AI 원시 응답:', rawText);
+            let parsed;
+            try {
+                parsed = typeof rawText === 'string' ? JSON.parse(rawText) : rawText;
+                console.log('🧩 파싱된 JSON:', parsed);
+            }
+            catch (e) {
+                console.error('❌ JSON 파싱 실패:', rawText);
+                throw new common_1.InternalServerErrorException('❌ AI 응답이 JSON 형식이 아닙니다');
+            }
             const optimized = this.optimizeResponse(parsed, exam.startDate.toISOString());
-            return optimized;
+            const notionFormatted = this.convertToNotionFormat(exam.subject, exam.startDate.toISOString(), exam.endDate.toISOString(), optimized);
+            console.log('🗓️ Notion 업로드용 포맷:', notionFormatted);
+            await this.notionService.syncToNotion({
+                subject: exam.subject,
+                startDate: exam.startDate.toISOString(),
+                endDate: exam.endDate.toISOString(),
+                databaseId: this.configService.get('DATABASE_ID'),
+                dailyPlan: notionFormatted,
+            });
+            return {
+                message: '✅ 학습 계획이 생성되어 Notion에 저장되었습니다.',
+                notionPreview: notionFormatted,
+            };
         }
         catch (err) {
             console.error('[AI 오류]', err);
-            throw new common_1.InternalServerErrorException('AI 처리 실패');
+            throw new common_1.InternalServerErrorException('AI 응답 처리 실패');
         }
     }
     createPrompt(dto, pref) {
@@ -58,9 +79,11 @@ let AiPlannerService = class AiPlannerService {
             .join('\n');
         return [
             '당신은 학습 계획을 세우는 인공지능입니다.',
-            '아래 정보를 기반으로 하루 단위 학습 일정을 JSON 형식으로 만들어 주세요.',
+            '아래 정보를 기반으로 하루 단위 학습 일정을 **정확한 JSON 배열**로 만들어 주세요.',
+            '설명 없이 JSON만 출력하세요. 백틱(`)은 쓰지 마세요.',
+            '⚠️ summary_text 같은 설명은 포함하지 마세요.',
             '',
-            `[사용자 정보]`,
+            '[사용자 정보]',
             `- 학습 스타일: ${pref.style === 'focus' ? '하루 한 과목 집중' : '여러 과목 병행'}`,
             `- 학습 요일: ${pref.studyDays.join(', ')}`,
             `- 하루 학습 세션 수: ${pref.sessionsPerDay}`,
@@ -77,13 +100,9 @@ let AiPlannerService = class AiPlannerService {
             '1. 모든 챕터를 남은 일수에 균등하게 분배하세요.',
             '2. 하루 단위로 "day"를 지정하고, 해당 날짜의 "chapters"를 배열로 제공하세요.',
             '3. 복습 또는 휴식일도 포함되면 좋습니다.',
-            '4. 설명 없이 JSON 배열만 출력해 주세요. 백틱(```)은 쓰지 마세요.',
             '',
             '예시 출력:',
-            '[',
-            '  { "day": 1, "chapters": ["Chapter 1", "Chapter 2"] },',
-            '  { "day": 2, "chapters": ["Chapter 3"] }',
-            ']',
+            '[{ "day": 1, "chapters": ["Chapter 1", "Chapter 2"] }, { "day": 2, "chapters": ["Chapter 3"] }]',
         ].join('\n');
     }
     optimizeResponse(parsed, startDate) {
@@ -95,6 +114,15 @@ let AiPlannerService = class AiPlannerService {
                 day: item.day || index + 1,
                 tasks: item.chapters || [],
             };
+        });
+    }
+    convertToNotionFormat(subject, startDate, endDate, optimized) {
+        const { format, parseISO } = require('date-fns');
+        return optimized.map((item) => {
+            const dateObj = parseISO(item.date);
+            const monthDay = format(dateObj, 'M/d');
+            const taskText = item.tasks.join(', ');
+            return `${monthDay}: ${taskText}`;
         });
     }
 };

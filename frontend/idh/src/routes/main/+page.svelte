@@ -1,10 +1,22 @@
 <script>
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+
+  // 기존 import는 그대로 유지
   import Header from '$lib/components/Header.svelte';
   import Welcome from '$lib/components/Welcome.svelte';
   import MyInfoCard from '$lib/components/MyInfoCard.svelte';
   import PlanCard from '$lib/components/PlanCard.svelte';
   import NotionLink from '$lib/components/NotionLink.svelte';
+
+  onMount(() => {
+    const token = sessionStorage.getItem('token');
+    if (!token) {
+      goto('/'); // 로그인 페이지로 리디렉션
+    }
+  });
 </script>
+
 
 <!-- 헤더 -->
 <Header />
@@ -30,7 +42,7 @@
     background-color: #f3f4f6;
     display: flex;
     justify-content: center;
-    overflow-y: auto;
+    overflow-y: hidden;
   }
 
   .main-content-area {

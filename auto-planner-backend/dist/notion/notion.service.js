@@ -13,7 +13,7 @@ exports.NotionService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const client_1 = require("@notionhq/client");
-const notion_token_store_1 = require("../auth/notion-token.store");
+const date_fns_1 = require("date-fns");
 let NotionService = class NotionService {
     configService;
     defaultDatabaseId;
@@ -21,23 +21,15 @@ let NotionService = class NotionService {
         this.configService = configService;
         this.defaultDatabaseId = this.configService.get('DATABASE_ID') ?? 'default-id';
     }
-    getClientForUser(userId) {
-        const userToken = (0, notion_token_store_1.getToken)(userId);
-        if (!userToken) {
-            throw new Error(`❌ Notion token not found for user ${userId}`);
-        }
-        return new client_1.Client({ auth: userToken });
-    }
     async addPlanEntry(data) {
-        const notion = this.getClientForUser(data.userId);
+        const notion = new client_1.Client({
+            auth: this.configService.get('NOTION_TOKEN'),
+        });
         return await notion.pages.create({
             parent: { database_id: data.databaseId },
             properties: {
                 Subject: {
                     title: [{ text: { content: data.subject } }],
-                },
-                'User ID': {
-                    rich_text: [{ text: { content: data.userId } }],
                 },
                 Date: {
                     date: { start: data.date },
@@ -51,9 +43,9 @@ let NotionService = class NotionService {
     async syncToNotion(dto) {
         for (const entry of dto.dailyPlan) {
             const [date, content] = entry.split(':').map((v) => v.trim());
-            const formattedDate = `2025-${date.replace('/', '-')}`;
+            const parsed = (0, date_fns_1.parse)(date, 'M/d', new Date(dto.startDate));
+            const formattedDate = (0, date_fns_1.format)(parsed, 'yyyy-MM-dd');
             await this.addPlanEntry({
-                userId: dto.userId,
                 subject: dto.subject,
                 date: formattedDate,
                 content,

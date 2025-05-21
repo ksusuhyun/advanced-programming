@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Client } from '@notionhq/client';
 import { SyncToNotionDto } from './dto/sync-to-notion.dto';
 import { getToken } from 'src/auth/notion-token.store';
+import { parse, format } from 'date-fns';
 
 @Injectable()
 export class NotionService {
@@ -13,22 +14,26 @@ export class NotionService {
     this.defaultDatabaseId = this.configService.get<string>('DATABASE_ID') ?? 'default-id';
   }
 
-  private getClientForUser(userId: string): Client {
-    const userToken = getToken(userId);
-    if (!userToken) {
-      throw new Error(`❌ Notion token not found for user ${userId}`);
-    }
-    return new Client({ auth: userToken });
-  }
+  // private getClientForUser(userId: string): Client {
+  //   const userToken = getToken(userId);
+  //   if (!userToken) {
+  //     throw new Error(`❌ Notion token not found for user ${userId}`);
+  //   }
+  //   return new Client({ auth: userToken });
+  // }
 
   async addPlanEntry(data: {
-    userId: string;
+    // userId: string;
     subject: string;
     date: string;
     content: string;
     databaseId: string;
   }) {
-    const notion = this.getClientForUser(data.userId);
+    // const notion = this.getClientForUser(data.userId); 아래 수정된 코드
+    const notion = new Client({
+  auth: this.configService.get<string>('NOTION_TOKEN'), // .env에 고정된 토큰 사용
+});
+
 
     return await notion.pages.create({
       parent: { database_id: data.databaseId },
@@ -36,9 +41,9 @@ export class NotionService {
         Subject: {
           title: [{ text: { content: data.subject } }],
         },
-        'User ID': {
-          rich_text: [{ text: { content: data.userId } }],
-        },
+        // 'User ID': {
+        //   rich_text: [{ text: { content: data.userId } }],
+        // },
         Date: {
           date: { start: data.date },
         },
@@ -52,10 +57,12 @@ export class NotionService {
   async syncToNotion(dto: SyncToNotionDto) {
     for (const entry of dto.dailyPlan) {
       const [date, content] = entry.split(':').map((v) => v.trim());
-      const formattedDate = `2025-${date.replace('/', '-')}`;
+      // dto.startDate의 연도에서 가져옴.
+      const parsed = parse(date, 'M/d', new Date(dto.startDate));
+      const formattedDate = format(parsed, 'yyyy-MM-dd');
 
       await this.addPlanEntry({
-        userId: dto.userId,
+        // userId: dto.userId,
         subject: dto.subject,
         date: formattedDate,
         content,

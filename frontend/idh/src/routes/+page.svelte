@@ -12,7 +12,7 @@
   async function handleLogin() {
     try {
       const result = await login({ userId, password }); // ✅ userId 키 사용
-      localStorage.setItem('token', result.access_token);
+      sessionStorage.setItem('token', result.access_token);
       loginError = false;
       goto('/main');
     } catch (e) {

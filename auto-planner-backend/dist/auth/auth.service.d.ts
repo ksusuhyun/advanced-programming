@@ -12,7 +12,7 @@ export declare class AuthService {
         id: number;
         tokenFreeLogin: boolean;
         createdAt: Date;
-    } | null>;
+    }>;
     login(dto: LoginDto): Promise<{
         access_token: string;
     }>;

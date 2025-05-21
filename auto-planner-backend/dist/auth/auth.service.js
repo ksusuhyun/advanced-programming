@@ -22,19 +22,17 @@ let AuthService = class AuthService {
     }
     async validateUser(userId, password) {
         const user = await this.userService.findOne(userId);
-        if (!user)
-            return null;
         if (user.password !== password) {
-            return null;
+            throw new common_1.UnauthorizedException('비밀번호가 올바르지 않습니다.');
         }
         return user;
     }
     async login(dto) {
         const user = await this.validateUser(dto.userId, dto.password);
-        if (!user) {
-            throw new common_1.UnauthorizedException('잘못된 사용자 정보입니다.');
-        }
-        const payload = { sub: user.userId };
+        const payload = {
+            sub: user.userId,
+            userId: user.userId,
+        };
         return {
             access_token: this.jwtService.sign(payload),
         };
