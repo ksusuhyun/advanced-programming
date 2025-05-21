@@ -20,3 +20,8 @@ export type StudyPreference = {
     }
   }
   
+  export async function getUserPreference(userId: string) {
+    const res = await fetch(`https://advanced-programming.onrender.com/user-preference/${userId}`);
+    if (!res.ok) throw new Error('Failed to fetch user preference');
+    return res.json();
+  }

@@ -1,15 +1,59 @@
-<script>
-  import SettingsConfirmationPage from '$lib/components/SettingsConfirmationPage.svelte';
+<script lang='ts'>
+  import Header from '$lib/components/Header.svelte';
+  import SettingsSummary from '$lib/components/SettingsSummary.svelte';
+  import { onMount } from 'svelte';
+  import { getUserPreference } from '$lib/api/userPreference';
+
+  let userEmail = 'user123@email.com';
+  let learningStyle = '';
+  let studyDays: string[] = [];
+  let studySessions = 0;
+
+  onMount(async () => {
+    const userId = 'user123';
+    try {
+      const res = await getUserPreference(userId);
+      learningStyle = res.style === 'focus' ? '하루 한 과목 집중' : '여러 과목 병행';
+      studyDays = res.studyDays;
+      studySessions = res.sessionsPerDay;
+    } catch (e) {
+      console.error('불러오기 실패:', e);
+    }
+  });
 </script>
 
-<!-- <SubjectPlannerPage /> -->
-<SettingsConfirmationPage />
+<div class="page-wrapper">
+  <Header />
+  <main class="content-area">
+    <SettingsSummary
+      {userEmail}
+      {learningStyle}
+      {studyDays}
+      {studySessions}
+    />
+  </main>
+</div>
 
 <style>
-  /* Global styles can be placed here or in a separate CSS file */
+  .page-wrapper {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #f3f4f6;
+  }
+
+  .content-area {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 32px;
+    box-sizing: border-box;
+  }
+
   :global(body) {
     margin: 0;
-    font-family: 'Inter', sans-serif; /* Default font from Figma */
-    background-color: #e5e5e5; /* Consistent background for the app */
+    font-family: 'Inter', sans-serif;
+    background-color: #f3f4f6;
   }
-</style> 
+</style>

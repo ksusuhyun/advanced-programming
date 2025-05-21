@@ -1,24 +1,16 @@
-<script>
-  // Dummy data for display, these would ideally be props or from a store
-  let userEmail = 'user123@email.com';
-  let learningStyle = '하루 한 과목 집중';
-  let studyDays = ['월', '화', '수', '목']; // Selected study days
-  let studySessions = 3;
+<script lang='ts'>
+  export let userEmail: string;
+  export let learningStyle: string;
+  export let studyDays: string[];
+  export let studySessions: number;
 
   function handleEditSettings() {
-    // Placeholder for edit settings logic
-    // This would typically navigate to a settings edit page
     console.log('Edit settings clicked');
-    // dispatch('editSettings') or navigate(url)
   }
 
   function handleStartPlan() {
-    // Placeholder for starting the plan logic
     console.log('Start plan clicked');
-    // dispatch('startPlan')
   }
-
-  // Icons from Figma are represented as placeholders or simple text/SVG for now
 </script>
 
 <div class="summary-card">
