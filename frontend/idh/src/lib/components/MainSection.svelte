@@ -96,7 +96,7 @@
 
 <style>
   .main-section-container {
-    height: calc(100vh - 64px); 
+    height: 100vh; 
     background-color: #f3f4f6;
     padding: 0 48px;
     display: flex;
@@ -108,7 +108,7 @@
 
   .content-card {
     max-height: 100%;
-    overflow-y: auto;
+    overflow-y: visible;
     width: 672px;
     background-color: #ffffff;
     border-radius: 12px;
@@ -118,6 +118,7 @@
     display: flex;
     flex-direction: column;
     gap:12px;
+    margin-top: 0;
   }
 
   .profile-header {

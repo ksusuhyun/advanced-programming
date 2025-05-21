@@ -14,7 +14,7 @@
 
       <!-- ✅ 프로필 이미지 또는 아이콘 영역 -->
       <div class="profile-section">
-        <div class="profile-image-placeholder"></div>
+        <div class="profile-image-placeholder" on:click={() => goto('/userinfo')}></div>
       </div>
     </nav>
   </div>
