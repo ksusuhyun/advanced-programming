@@ -1,44 +1,115 @@
 <script>
-  import Header from '$lib/components/Header.svelte'; 
-  import SubjectForm from '$lib/components/SubjectForm.svelte'; 
+  import Header from '$lib/components/Header.svelte';
+  import SubjectForm from '$lib/components/SubjectForm.svelte';
+
+  let subjects = [
+    {
+      subjectName: '',
+      startDate: '',
+      endDate: '',
+      importance: 3,
+      units: [{ unitName: '', studyAmount: '', difficulty: '선택' }]
+    }
+  ];
+
+  function handleSubjectChange(index, updatedSubject) {
+    subjects[index] = { ...updatedSubject };
+  }
+
+  function addSubject() {
+    subjects = [
+      ...subjects,
+      {
+        subjectName: '',
+        startDate: '',
+        endDate: '',
+        importance: 3,
+        units: [{ unitName: '', studyAmount: '', difficulty: '선택' }]
+      }
+    ];
+  }
+
+  function removeSubject(index) {
+    if (subjects.length > 1) {
+      subjects = subjects.filter((_, i) => i !== index);
+    }
+  }
+
+  function handleCreatePlan() {
+    console.log('✅ 최종 계획:', subjects);
+    // TODO: API 호출 또는 페이지 이동
+  }
 </script>
 
-<div class="page-container">
+<div class="page-wrapper">
   <Header />
   <main class="content-area">
-    <SubjectForm />
+    <div class="form-wrapper">
+      {#each subjects as subject, i (i)}
+        <SubjectForm
+          index={i}
+          subjectData={subject}
+          onChange={handleSubjectChange}
+          onRemove={removeSubject}
+        />
+      {/each}
+
+      <button class="add-subject-btn" on:click={addSubject}>+ 과목 추가</button>
+      <button class="create-plan-btn" on:click={handleCreatePlan}>학습 계획 생성하기</button>
+    </div>
   </main>
 </div>
 
 <style>
-  .page-container {
-    width: 100%;
-    max-width: 1440px;       /* 최대 너비 제한 */
-    height: 100vh;           /* 전체 화면 높이 */
-    background-color: #ffffff;
-    border: 1px solid #ced4da;
-    border-radius: 8px;
-    margin: 0 auto;          /* 상단 여백 제거하고 중앙 정렬만 유지 */
-    overflow: hidden;
+  .page-wrapper {
     display: flex;
     flex-direction: column;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    min-height: 100vh;
+    background-color: #f3f4f6;
+    overflow-x: hidden; /* ✅ 가로 스크롤 제거 */
   }
 
   .content-area {
     flex-grow: 1;
-    background-color: #f3f4f6;
-    overflow-y: auto;
-    padding: 20px;
+    padding: 40px 20px;
     display: flex;
     justify-content: center;
     align-items: flex-start;
   }
 
+  .form-wrapper {
+    width: 100%;
+    max-width: 896px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .add-subject-btn,
+  .create-plan-btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    height: 56px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .add-subject-btn {
+    background-color: #ffffff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+
+  .create-plan-btn {
+    background-color: #1f2937;
+    color: #ffffff;
+    border: 1px solid #1f2937;
+  }
+
   :global(body) {
-    background-color: #e5e5e5;
     margin: 0;
     font-family: 'Inter', sans-serif;
-    overflow-x: hidden; /* ✅ 가로 스크롤 제거 */
+    background-color: #e5e5e5;
+    overflow-x: hidden;
   }
 </style>

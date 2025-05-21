@@ -1,107 +1,84 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-
-  const dispatch = createEventDispatcher();
-
-  let subjectTitle = '과목 1'; // Default or could be a prop
-  let subjectName = '';
-  let startDate = '';
-  let endDate = '';
-  let importance = 3; // Default value (1-5 scale)
-  
-  let units = [
-    { unitName: '', studyAmount: '', difficulty: '선택' },
-  ];
-
-  function addUnit() {
-    units = [...units, { unitName: '', studyAmount: '', difficulty: '선택' }];
-  }
-
-  function removeUnit(index) {
-    if (units.length > 1) {
-      units = units.filter((_, i) => i !== index);
-    }
-  }
-
-  function handleAddSubject() {
-    // Logic to add another subject (could involve parent component or a list here)
-    console.log('Add new subject clicked');
-    // For now, let's just clear the form as an example or dispatch an event
-    // dispatch('addSubject', { subjectName, startDate, endDate, importance, units });
-  }
-
-  function handleCreatePlan() {
-    console.log('Create study plan:', {
-      subjectTitle,
-      subjectName,
-      startDate,
-      endDate,
-      importance,
-      units
-    });
-    // dispatch('createPlan', { subjectName, startDate, endDate, importance, units });
-    // 실제 계획 생성 로직 또는 이벤트 dispatch
-  }
+  export let index;
+  export let subjectData;
+  export let onChange;
+  export let onRemove;
 
   const difficultyOptions = ['선택', '쉬움', '보통', '어려움'];
 
+  function addUnit() {
+    subjectData.units = [...subjectData.units, { unitName: '', studyAmount: '', difficulty: '선택' }];
+    onChange(index, subjectData);
+  }
+
+  function removeUnit(i) {
+    if (subjectData.units.length > 1) {
+      subjectData.units = subjectData.units.filter((_, j) => j !== i);
+      onChange(index, subjectData);
+    }
+  }
+
+  function handleFieldChange(field, value) {
+    subjectData[field] = value;
+    onChange(index, subjectData);
+  }
+
+  function handleUnitChange(i, field, value) {
+    subjectData.units[i][field] = value;
+    onChange(index, subjectData);
+  }
 </script>
 
-<div class="form-container">
-  <div class="subject-card">
-    <h2 class="subject-card-title">{subjectTitle}</h2>
-    
+<div class="subject-card">
+  <h2 class="subject-card-title">과목 {index + 1}</h2>
+
+  <div class="form-group">
+    <label for="subject-name">과목명</label>
+    <input type="text" id="subject-name" placeholder="과목명을 입력하세요" bind:value={subjectData.subjectName} on:input={(e) => handleFieldChange('subjectName', e.target.value)} />
+  </div>
+
+  <div class="date-group">
     <div class="form-group">
-      <label for="subject-name">과목명</label>
-      <input type="text" id="subject-name" placeholder="과목명을 입력하세요" bind:value={subjectName}>
+      <label>시작일</label>
+      <input type="date" bind:value={subjectData.startDate} on:input={(e) => handleFieldChange('startDate', e.target.value)} />
     </div>
-
-    <div class="date-group">
-      <div class="form-group">
-        <label for="start-date">시작일</label>
-        <input type="date" id="start-date" bind:value={startDate} placeholder="mm/dd/yyyy">
-      </div>
-      <div class="form-group">
-        <label for="end-date">종료일</label>
-        <input type="date" id="end-date" bind:value={endDate} placeholder="mm/dd/yyyy">
-      </div>
-    </div>
-
     <div class="form-group">
-      <label for="importance-slider">중요도: {importance}</label>
-      <input type="range" id="importance-slider" min="1" max="5" bind:value={importance} class="slider">
-    </div>
-
-    <div class="units-section">
-      <h3 class="units-title">학습 단원</h3>
-      {#each units as unit, i (i)}
-        <div class="unit-entry">
-          <input type="text" placeholder="단원명" bind:value={unit.unitName} class="unit-input">
-          <input type="text" placeholder="학습량" bind:value={unit.studyAmount} class="unit-input">
-          <select bind:value={unit.difficulty} class="unit-select">
-            {#each difficultyOptions as option}
-              <option value={option.toLowerCase() === '선택' ? '' : option}>{option}</option>
-            {/each}
-          </select>
-          {#if units.length > 1}
-            <button type="button" on:click={() => removeUnit(i)} class="remove-unit-btn">-</button>
-          {/if}
-        </div>
-      {/each}
-      <button type="button" on:click={addUnit} class="add-unit-btn">
-        <!-- Placeholder for plus icon from 6:661 -->
-        <span class="icon-placeholder">+</span> 단원 추가
-      </button>
+      <label>종료일</label>
+      <input type="date" bind:value={subjectData.endDate} on:input={(e) => handleFieldChange('endDate', e.target.value)} />
     </div>
   </div>
 
-  <button type="button" class="add-subject-btn" on:click={handleAddSubject}>
-     <!-- Placeholder for plus icon from 6:585 -->
-    <span class="icon-placeholder">+</span> 과목 추가
-  </button>
-  <button type="button" class="create-plan-btn" on:click={handleCreatePlan}>학습 계획 생성하기</button>
+  <div class="form-group">
+    <label>중요도: {subjectData.importance}</label>
+    <input type="range" min="1" max="5" bind:value={subjectData.importance} on:input={(e) => handleFieldChange('importance', +e.target.value)} class="slider" />
+  </div>
 
+  <div class="units-section">
+    <h3 class="units-title">학습 단원</h3>
+    {#each subjectData.units as unit, i (i)}
+      <div class="unit-entry">
+        <input type="text" placeholder="단원명" bind:value={unit.unitName} on:input={(e) => handleUnitChange(i, 'unitName', e.target.value)} class="unit-input" />
+        <input type="text" placeholder="학습량" bind:value={unit.studyAmount} on:input={(e) => handleUnitChange(i, 'studyAmount', e.target.value)} class="unit-input" />
+        <select bind:value={unit.difficulty} on:change={(e) => handleUnitChange(i, 'difficulty', e.target.value)} class="unit-select">
+          {#each difficultyOptions as option}
+            <option value={option.toLowerCase() === '선택' ? '' : option}>{option}</option>
+          {/each}
+        </select>
+        {#if subjectData.units.length > 1}
+          <button type="button" class="remove-unit-btn" on:click={() => removeUnit(i)}>−</button>
+        {/if}
+      </div>
+    {/each}
+    <button type="button" on:click={addUnit} class="add-unit-btn">
+      <span class="icon-placeholder">+</span> 단원 추가
+    </button>
+  </div>
+
+  <button type="button" on:click={() => onRemove(index)} class="add-subject-btn">
+    ❌ 과목 삭제
+  </button>
 </div>
+
 
 <style>
   .form-container {
