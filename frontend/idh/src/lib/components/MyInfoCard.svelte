@@ -1,5 +1,10 @@
 <script>
-  // 카드 관련 로직 (예: 버튼 클릭 시 동작)은 여기에 추가될 수 있습니다.
+  // 나의 정보 확인하기 버튼 클릭 시 동작
+  import { goto } from '$app/navigation';
+
+  function handleGoToPreference() {
+    goto('/userpreference');
+  }
 </script>
 
 <div class="info-card">
