@@ -36,13 +36,15 @@ export class AuthController {
   @ApiOperation({ summary: 'Notion OAuth 콜백 처리' })
   async handleNotionCallback(
     @Query('code') code: string,
-    @Query('state') userId: string,
+    // @Query('state') userId: string,
+    @Query('state') state: string,
     @Res() res: Response,
   ) {
     // ✅ 여기 로그 추가
     console.log('✅ [콜백 진입]');
     console.log('🔍 code:', code);
-    console.log('🔍 state:', userId);
+    // console.log('🔍 state:', userId);
+    console.log('🔍 state:', state);
     const clientId = process.env.NOTION_CLIENT_ID as string;
     const clientSecret = process.env.NOTION_CLIENT_SECRET as string;
     const redirectUri = process.env.NOTION_REDIRECT_URI as string;
@@ -73,6 +75,7 @@ export class AuthController {
       const workspace_id = tokenResponse.data.workspace_id;
 
       // ✅ 토큰 저장 (임시 store 또는 DB)
+      const userId = state.replace('user-', '');
       saveToken(userId, access_token);
       console.log('✅ saveToken 실행됨!');
       console.log(`[✅ Notion 연동 완료] userId: ${userId}, token: ${access_token}`);
