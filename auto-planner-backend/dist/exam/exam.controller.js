@@ -66,7 +66,7 @@ __decorate([
 ], ExamController.prototype, "deleteExamBySubject", null);
 __decorate([
     (0, common_1.Delete)(':userId'),
-    (0, swagger_1.ApiOperation)({ summary: '사용자의 모든 시험 정보 삭제 (트랜잭션)' }),
+    (0, swagger_1.ApiOperation)({ summary: '사용자의 모든 시험 정보 삭제 ' }),
     (0, swagger_1.ApiParam)({ name: 'userId', description: '사용자 ID' }),
     __param(0, (0, common_1.Param)('userId')),
     __metadata("design:type", Function),

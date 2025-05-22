@@ -4,6 +4,24 @@ import { UserPreferenceService } from '../../user-preference/user-preference.ser
 import { ExamService } from '../../exam/exam.service';
 import { LLMClientService } from './llm-client.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
+interface Preference {
+  style: string;
+  studyDays: string[];
+  sessionsPerDay: number;
+}
+
+interface Chapter {
+  chapterTitle: string;
+  contentVolume?: number; // optional, 필요하면 추가
+}
+
+interface Subject {
+  subject: string;
+  startDate: string;
+  endDate: string;
+  chapters: Chapter[];
+}
+
 
 @Injectable()
 export class AiPlannerService {
@@ -26,21 +44,15 @@ export class AiPlannerService {
 
     const mergedSubjects = this.mergeSubjects(exams);
     const prompt = this.createPrompt(mergedSubjects, preference);
-    const raw = await this.llmClient.generate(prompt);
 
-    const jsonMatch = raw.match(/\[\s*{[\s\S]*?}\s*\]/);
-    if (!jsonMatch) {
-      console.error('❌ LLM 응답에서 JSON 추출 실패:', raw);
+    const raw = await this.llmClient.generate(prompt);  // 이미 object[]로 반환됨
+
+    if (!Array.isArray(raw)) {
+      console.error('❌ LLM 응답이 배열이 아님:', raw);
       throw new InternalServerErrorException('LLM 응답이 JSON 배열 형식이 아닙니다.');
     }
 
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return parsed;
-    } catch (e) {
-      console.error('❌ JSON 파싱 오류:', jsonMatch[0]);
-      throw new InternalServerErrorException('JSON 파싱에 실패했습니다.');
-    }
+    return raw;
   }
 
   private mergeSubjects(exams: any[]): any[] {
@@ -69,34 +81,33 @@ export class AiPlannerService {
     return Object.values(grouped);
   }
 
-  private createPrompt(subjects: any[], pref: any): string {
+  private createPrompt(subjects: Subject[], pref: Preference): string {
     const lines = [
-      'You are an AI that returns ONLY a JSON array in the following format:',
-      '[{"subject": "과목명", "startDate": "yyyy-MM-dd", "endDate": "yyyy-MM-dd", "dailyPlan": ["6/1: 과목명 - 챕터명"]}]',
-      '',
-      'DO NOT add any explanation, headers, or notes.',
-      '',
-      `User Preferences:`,
+      "You are an assistant that returns ONLY a valid JSON array, no explanations.",
+      "Each array item must have: subject, startDate, endDate, and dailyPlan.",
+      "Each dailyPlan entry MUST include a page range (e.g., (p.23-34)).",
+      "Do NOT include any text before or after the JSON array.",
+      "",
+      "User Preferences:",
       `- Style: ${pref.style === 'focus' ? 'Focused' : 'Multi'}`,
       `- Study Days: ${pref.studyDays.join(', ')}`,
       `- Sessions per Day: ${pref.sessionsPerDay}`,
-      '',
-      'Exams:',
+      "",
+      "Exams:",
     ];
 
     for (const subj of subjects) {
       const chapters = subj.chapters
-        .map((ch, i) => `Chapter ${i + 1}: ${ch.chapterTitle}`)
+        .map((ch, i) => `Chapter ${i + 1}: ${ch.chapterTitle}`) // 페이지 정보 있다면 (p.XX-YY) 붙이기
         .join(', ');
       lines.push(
         `- Subject: ${subj.subject}`,
         `  Period: ${new Date(subj.startDate).toDateString()} ~ ${new Date(subj.endDate).toDateString()}`,
         `  Chapters: ${chapters}`,
-        ''
+        ""
       );
     }
 
-    lines.push('Only return the JSON array.');
     return lines.join('\n');
   }
 }

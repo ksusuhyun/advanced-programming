@@ -26,7 +26,7 @@ export class ExamService {
         chapters: {
           create: exam.chapters.map((ch) => ({
             chapterTitle: ch.chapterTitle,
-            difficulty: String(ch.difficulty),
+            difficulty: (ch.difficulty),
             contentVolume: ch.contentVolume,
           })),
         },
