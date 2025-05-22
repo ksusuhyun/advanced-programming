@@ -14,41 +14,46 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const user_preference_service_1 = require("../../user-preference/user-preference.service");
 const exam_service_1 = require("../../exam/exam.service");
-const axios_1 = require("axios");
-const date_fns_1 = require("date-fns");
+const llm_client_service_1 = require("./llm-client.service");
 let AiPlannerService = class AiPlannerService {
     configService;
     userPreferenceService;
     examService;
-    constructor(configService, userPreferenceService, examService) {
+    llmClient;
+    constructor(configService, userPreferenceService, examService, llmClient) {
         this.configService = configService;
         this.userPreferenceService = userPreferenceService;
         this.examService = examService;
+        this.llmClient = llmClient;
     }
-    async generateStudyPlanByUserId(userId) {
-        const preference = await this.userPreferenceService.findByUserId(userId);
-        const { exams } = await this.examService.findByUser(userId);
-        if (!preference || !exams || exams.length === 0) {
-            throw new common_1.InternalServerErrorException('필수 정보가 부족합니다.');
-        }
-        const mergedSubjects = this.mergeSubjects(exams);
-        const prompt = this.createPrompt(mergedSubjects, preference);
-        const HF_API_URL = 'http://localhost:8000/v1/completions';
-        const response = await axios_1.default.post(HF_API_URL, {
-            model: 'openchat',
-            prompt: prompt,
-            max_tokens: 1024,
-            temperature: 0.7,
-        });
-        const rawText = response.data?.[0]?.generated_text ?? response.data;
-        const jsonMatch = rawText.match(/\[\s*{[\s\S]*?}\s*\]/);
-        if (!jsonMatch) {
-            console.error('❌ JSON 파싱 실패:', rawText);
-            throw new common_1.InternalServerErrorException('AI 응답이 올바른 JSON 배열 형식이 아닙니다.');
-        }
-        const parsed = JSON.parse(jsonMatch[0]);
-        return parsed;
+  async generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]> {
+    const preference = await this.userPreferenceService.findByUserId(userId);
+    const { exams } = await this.examService.findByUser(userId);
+    console.log('✅ preference:', preference);
+    console.log('✅ exams:', exams);
+
+    if (!preference || !exams || exams.length === 0) {
+      throw new InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
     }
+
+    const mergedSubjects = this.mergeSubjects(exams);
+    const prompt = this.createPrompt(mergedSubjects, preference);
+    const raw = await this.llmClient.generate(prompt);
+
+    const jsonMatch = raw.match(/\[\s*{[\s\S]*?}\s*\]/);
+    if (!jsonMatch) {
+      console.error('❌ LLM 응답에서 JSON 추출 실패:', raw);
+      throw new InternalServerErrorException('LLM 응답이 JSON 배열 형식이 아닙니다.');
+    }
+
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return parsed;
+    } catch (e) {
+      console.error('❌ JSON 파싱 오류:', jsonMatch[0]);
+      throw new InternalServerErrorException('JSON 파싱에 실패했습니다.');
+    }
+  }
     mergeSubjects(exams) {
         const grouped = {};
         for (const exam of exams) {
@@ -62,12 +67,12 @@ let AiPlannerService = class AiPlannerService {
                 };
             }
             else {
-                if ((0, date_fns_1.isBefore)(new Date(exam.startDate), new Date(grouped[key].startDate))) {
-                    grouped[key].startDate = exam.startDate;
-                }
-                if (new Date(exam.endDate) > new Date(grouped[key].endDate)) {
-                    grouped[key].endDate = exam.endDate;
-                }
+                grouped[key].startDate = new Date(exam.startDate) < new Date(grouped[key].startDate)
+                    ? exam.startDate
+                    : grouped[key].startDate;
+                grouped[key].endDate = new Date(exam.endDate) > new Date(grouped[key].endDate)
+                    ? exam.endDate
+                    : grouped[key].endDate;
                 grouped[key].chapters.push(...exam.chapters);
             }
         }
@@ -88,7 +93,9 @@ let AiPlannerService = class AiPlannerService {
             'Exams:',
         ];
         for (const subj of subjects) {
-            const chapters = subj.chapters.map((ch, i) => `Chapter ${i + 1}: ${ch.chapterTitle}`).join(', ');
+            const chapters = subj.chapters
+                .map((ch, i) => `Chapter ${i + 1}: ${ch.chapterTitle}`)
+                .join(', ');
             lines.push(`- Subject: ${subj.subject}`, `  Period: ${new Date(subj.startDate).toDateString()} ~ ${new Date(subj.endDate).toDateString()}`, `  Chapters: ${chapters}`, '');
         }
         lines.push('Only return the JSON array.');
@@ -100,6 +107,7 @@ exports.AiPlannerService = AiPlannerService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [config_1.ConfigService,
         user_preference_service_1.UserPreferenceService,
-        exam_service_1.ExamService])
+        exam_service_1.ExamService,
+        llm_client_service_1.LLMClientService])
 ], AiPlannerService);
 //# sourceMappingURL=ai-planner.service.js.map
