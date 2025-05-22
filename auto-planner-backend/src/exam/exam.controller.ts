@@ -33,6 +33,14 @@ export class ExamController {
   ) {
     return this.examService.deleteExamWithChaptersByUser(userId, subject);
   }
+
+  @Delete(':userId')
+  @ApiOperation({ summary: '사용자의 모든 시험 정보 삭제 ' })
+  @ApiParam({ name: 'userId', description: '사용자 ID' })
+  deleteAllExams(@Param('userId') userId: string) {
+  return this.examService.deleteAllExamsByUser(userId);
+}
+
   // JWT 보호 적용
   // @Get(':userId')
   // @UseGuards(JwtAuthGuard) 
