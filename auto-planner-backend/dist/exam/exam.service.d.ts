@@ -10,7 +10,7 @@ export declare class ExamService {
                 id: number;
                 createdAt: Date;
                 chapterTitle: string;
-                difficulty: string;
+                difficulty: number;
                 contentVolume: number;
                 updatedAt: Date;
                 examId: number;
@@ -33,7 +33,7 @@ export declare class ExamService {
                 id: number;
                 createdAt: Date;
                 chapterTitle: string;
-                difficulty: string;
+                difficulty: number;
                 contentVolume: number;
                 updatedAt: Date;
                 examId: number;
@@ -54,7 +54,7 @@ export declare class ExamService {
             id: number;
             createdAt: Date;
             chapterTitle: string;
-            difficulty: string;
+            difficulty: number;
             contentVolume: number;
             updatedAt: Date;
             examId: number;

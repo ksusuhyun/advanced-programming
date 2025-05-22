@@ -26,34 +26,23 @@ let AiPlannerService = class AiPlannerService {
         this.examService = examService;
         this.llmClient = llmClient;
     }
-  async generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]> {
-    const preference = await this.userPreferenceService.findByUserId(userId);
-    const { exams } = await this.examService.findByUser(userId);
-    console.log('✅ preference:', preference);
-    console.log('✅ exams:', exams);
-
-    if (!preference || !exams || exams.length === 0) {
-      throw new InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
+    async generateStudyPlanByUserId(userId) {
+        const preference = await this.userPreferenceService.findByUserId(userId);
+        const { exams } = await this.examService.findByUser(userId);
+        console.log('✅ preference:', preference);
+        console.log('✅ exams:', exams);
+        if (!preference || !exams || exams.length === 0) {
+            throw new common_1.InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
+        }
+        const mergedSubjects = this.mergeSubjects(exams);
+        const prompt = this.createPrompt(mergedSubjects, preference);
+        const raw = await this.llmClient.generate(prompt);
+        if (!Array.isArray(raw)) {
+            console.error('❌ LLM 응답이 배열이 아님:', raw);
+            throw new common_1.InternalServerErrorException('LLM 응답이 JSON 배열 형식이 아닙니다.');
+        }
+        return raw;
     }
-
-    const mergedSubjects = this.mergeSubjects(exams);
-    const prompt = this.createPrompt(mergedSubjects, preference);
-    const raw = await this.llmClient.generate(prompt);
-
-    const jsonMatch = raw.match(/\[\s*{[\s\S]*?}\s*\]/);
-    if (!jsonMatch) {
-      console.error('❌ LLM 응답에서 JSON 추출 실패:', raw);
-      throw new InternalServerErrorException('LLM 응답이 JSON 배열 형식이 아닙니다.');
-    }
-
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return parsed;
-    } catch (e) {
-      console.error('❌ JSON 파싱 오류:', jsonMatch[0]);
-      throw new InternalServerErrorException('JSON 파싱에 실패했습니다.');
-    }
-  }
     mergeSubjects(exams) {
         const grouped = {};
         for (const exam of exams) {
@@ -80,25 +69,24 @@ let AiPlannerService = class AiPlannerService {
     }
     createPrompt(subjects, pref) {
         const lines = [
-            'You are an AI that returns ONLY a JSON array in the following format:',
-            '[{"subject": "과목명", "startDate": "yyyy-MM-dd", "endDate": "yyyy-MM-dd", "dailyPlan": ["6/1: 과목명 - 챕터명"]}]',
-            '',
-            'DO NOT add any explanation, headers, or notes.',
-            '',
-            `User Preferences:`,
+            "You are an assistant that returns ONLY a valid JSON array, no explanations.",
+            "Each array item must have: subject, startDate, endDate, and dailyPlan.",
+            "Each dailyPlan entry MUST include a page range (e.g., (p.23-34)).",
+            "Do NOT include any text before or after the JSON array.",
+            "",
+            "User Preferences:",
             `- Style: ${pref.style === 'focus' ? 'Focused' : 'Multi'}`,
             `- Study Days: ${pref.studyDays.join(', ')}`,
             `- Sessions per Day: ${pref.sessionsPerDay}`,
-            '',
-            'Exams:',
+            "",
+            "Exams:",
         ];
         for (const subj of subjects) {
             const chapters = subj.chapters
                 .map((ch, i) => `Chapter ${i + 1}: ${ch.chapterTitle}`)
                 .join(', ');
-            lines.push(`- Subject: ${subj.subject}`, `  Period: ${new Date(subj.startDate).toDateString()} ~ ${new Date(subj.endDate).toDateString()}`, `  Chapters: ${chapters}`, '');
+            lines.push(`- Subject: ${subj.subject}`, `  Period: ${new Date(subj.startDate).toDateString()} ~ ${new Date(subj.endDate).toDateString()}`, `  Chapters: ${chapters}`, "");
         }
-        lines.push('Only return the JSON array.');
         return lines.join('\n');
     }
 };

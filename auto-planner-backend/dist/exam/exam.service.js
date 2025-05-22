@@ -34,7 +34,7 @@ let ExamService = class ExamService {
                 chapters: {
                     create: exam.chapters.map((ch) => ({
                         chapterTitle: ch.chapterTitle,
-                        difficulty: String(ch.difficulty),
+                        difficulty: (ch.difficulty),
                         contentVolume: ch.contentVolume,
                     })),
                 },
@@ -122,7 +122,7 @@ let ExamService = class ExamService {
             }),
         ]);
         return {
-            message: `${examIds.length}개의 시험과 모든 챕터가 트랜잭션으로 안전하게 삭제되었습니다.`,
+            message: `${examIds.length}개의 시험과 모든 챕터가 삭제되었습니다.`,
         };
     }
 };

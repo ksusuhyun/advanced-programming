@@ -26,7 +26,7 @@ async function bootstrap() {
     const document = swagger_1.SwaggerModule.createDocument(app, config);
     swagger_1.SwaggerModule.setup('api', app, document);
     (0, notion_token_store_1.saveToken)('202255150', 'secret_abc123456yournotiontoken');
-    await app.listen(process.env.PORT || 4525, '0.0.0.0');
+    await app.listen(process.env.PORT || 4523, '0.0.0.0');
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

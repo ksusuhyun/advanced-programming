@@ -40,4 +40,8 @@ __decorate([
     (0, swagger_1.ApiProperty)({ example: ['6/1: 수열의 개념', '6/2: 등차수열'] }),
     __metadata("design:type", Array)
 ], SyncToNotionDto.prototype, "dailyPlan", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'notion-db-id-abc123' }),
+    __metadata("design:type", String)
+], SyncToNotionDto.prototype, "databaseId", void 0);
 //# sourceMappingURL=sync-to-notion.dto.js.map
