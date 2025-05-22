@@ -52,4 +52,7 @@ export declare class ExamController {
     deleteExamBySubject(userId: string, subject: string): Promise<{
         message: string;
     }>;
+    deleteAllExams(userId: string): Promise<{
+        message: string;
+    }>;
 }

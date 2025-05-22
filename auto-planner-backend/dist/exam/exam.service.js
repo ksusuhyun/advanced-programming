@@ -95,6 +95,36 @@ let ExamService = class ExamService {
             message: `과목 "${subject}"에 대한 시험과 챕터가 삭제되었습니다.`,
         };
     }
+    async deleteAllExamsByUser(userId) {
+        const user = await this.prisma.user.findUnique({
+            where: { userId },
+        });
+        if (!user)
+            throw new Error('사용자를 찾을 수 없습니다.');
+        const exams = await this.prisma.exam.findMany({
+            where: { userId: user.id },
+            select: { id: true },
+        });
+        const examIds = exams.map((e) => e.id);
+        if (examIds.length === 0) {
+            return { message: '삭제할 시험이 없습니다.' };
+        }
+        await this.prisma.$transaction([
+            this.prisma.chapter.deleteMany({
+                where: {
+                    examId: { in: examIds },
+                },
+            }),
+            this.prisma.exam.deleteMany({
+                where: {
+                    id: { in: examIds },
+                },
+            }),
+        ]);
+        return {
+            message: `${examIds.length}개의 시험과 모든 챕터가 트랜잭션으로 안전하게 삭제되었습니다.`,
+        };
+    }
 };
 exports.ExamService = ExamService;
 exports.ExamService = ExamService = __decorate([

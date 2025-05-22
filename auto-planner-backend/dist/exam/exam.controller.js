@@ -31,6 +31,9 @@ let ExamController = class ExamController {
     deleteExamBySubject(userId, subject) {
         return this.examService.deleteExamWithChaptersByUser(userId, subject);
     }
+    deleteAllExams(userId) {
+        return this.examService.deleteAllExamsByUser(userId);
+    }
 };
 exports.ExamController = ExamController;
 __decorate([
@@ -61,6 +64,15 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], ExamController.prototype, "deleteExamBySubject", null);
+__decorate([
+    (0, common_1.Delete)(':userId'),
+    (0, swagger_1.ApiOperation)({ summary: '사용자의 모든 시험 정보 삭제 (트랜잭션)' }),
+    (0, swagger_1.ApiParam)({ name: 'userId', description: '사용자 ID' }),
+    __param(0, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], ExamController.prototype, "deleteAllExams", null);
 exports.ExamController = ExamController = __decorate([
     (0, swagger_1.ApiTags)('exam'),
     (0, common_1.Controller)('exam'),

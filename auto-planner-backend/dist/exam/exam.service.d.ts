@@ -72,4 +72,7 @@ export declare class ExamService {
     deleteExamWithChaptersByUser(userId: string, subject: string): Promise<{
         message: string;
     }>;
+    deleteAllExamsByUser(userId: string): Promise<{
+        message: string;
+    }>;
 }
