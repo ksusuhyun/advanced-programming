@@ -26,31 +26,34 @@ let AiPlannerService = class AiPlannerService {
         this.examService = examService;
         this.llmClient = llmClient;
     }
-    async generateStudyPlanByUserId(userId) {
-        const preference = await this.userPreferenceService.findByUserId(userId);
-        const { exams } = await this.examService.findByUser(userId);
-        console.log('✅ preference:', preference);
-        console.log('✅ exams:', exams);
-        if (!preference || !exams || exams.length === 0) {
-            throw new common_1.InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
-        }
-        const mergedSubjects = this.mergeSubjects(exams);
-        const prompt = this.createPrompt(mergedSubjects, preference);
-        const raw = await this.llmClient.generate(prompt);
-        const jsonMatch = raw.match(/\[\s*{[\s\S]*?}\s*\]/);
-        if (!jsonMatch) {
-            console.error('❌ LLM 응답에서 JSON 추출 실패:', raw);
-            throw new common_1.InternalServerErrorException('LLM 응답이 JSON 배열 형식이 아닙니다.');
-        }
-        try {
-            const parsed = JSON.parse(jsonMatch[0]);
-            return parsed;
-        }
-        catch (e) {
-            console.error('❌ JSON 파싱 오류:', jsonMatch[0]);
-            throw new common_1.InternalServerErrorException('JSON 파싱에 실패했습니다.');
-        }
+  async generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]> {
+    const preference = await this.userPreferenceService.findByUserId(userId);
+    const { exams } = await this.examService.findByUser(userId);
+    console.log('✅ preference:', preference);
+    console.log('✅ exams:', exams);
+
+    if (!preference || !exams || exams.length === 0) {
+      throw new InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
     }
+
+    const mergedSubjects = this.mergeSubjects(exams);
+    const prompt = this.createPrompt(mergedSubjects, preference);
+    const raw = await this.llmClient.generate(prompt);
+
+    const jsonMatch = raw.match(/\[\s*{[\s\S]*?}\s*\]/);
+    if (!jsonMatch) {
+      console.error('❌ LLM 응답에서 JSON 추출 실패:', raw);
+      throw new InternalServerErrorException('LLM 응답이 JSON 배열 형식이 아닙니다.');
+    }
+
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return parsed;
+    } catch (e) {
+      console.error('❌ JSON 파싱 오류:', jsonMatch[0]);
+      throw new InternalServerErrorException('JSON 파싱에 실패했습니다.');
+    }
+  }
     mergeSubjects(exams) {
         const grouped = {};
         for (const exam of exams) {

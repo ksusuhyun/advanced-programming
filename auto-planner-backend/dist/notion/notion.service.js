@@ -14,17 +14,25 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const client_1 = require("@notionhq/client");
 const date_fns_1 = require("date-fns");
+const notion_token_store_1 = require("../auth/notion-token.store");
 let NotionService = class NotionService {
     configService;
-    defaultDatabaseId;
     constructor(configService) {
         this.configService = configService;
-        this.defaultDatabaseId = this.configService.get('DATABASE_ID') ?? 'default-id';
+    }
+    getClientForUser(userId) {
+        const token = (0, notion_token_store_1.getToken)(userId);
+        if (!token) {
+            throw new Error(`❌ Notion token not found for user: ${userId}`);
+        }
+        return new client_1.Client({ auth: token });
     }
     async addPlanEntry(data) {
-        const notion = new client_1.Client({
-            auth: this.configService.get('NOTION_TOKEN'),
-        });
+        const userToken = (0, notion_token_store_1.getToken)(data.userId);
+        if (!userToken) {
+            throw new Error(`[❌ Notion 토큰 없음] userId: ${data.userId}`);
+        }
+        const notion = new client_1.Client({ auth: userToken });
         return await notion.pages.create({
             parent: { database_id: data.databaseId },
             properties: {
@@ -46,14 +54,15 @@ let NotionService = class NotionService {
             const parsed = (0, date_fns_1.parse)(date, 'M/d', new Date(dto.startDate));
             const formattedDate = (0, date_fns_1.format)(parsed, 'yyyy-MM-dd');
             await this.addPlanEntry({
+                userId: dto.userId,
                 subject: dto.subject,
                 date: formattedDate,
-                content,
+                content: content,
                 databaseId: dto.databaseId,
             });
         }
         return {
-            message: '📌 노션 연동 완료',
+            message: '📌 Notion 연동 완료',
             count: dto.dailyPlan.length,
         };
     }

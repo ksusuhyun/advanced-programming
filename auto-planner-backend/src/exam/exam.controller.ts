@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards, Delete } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { ExamService } from './exam.service';
@@ -22,6 +22,24 @@ export class ExamController {
   findByUser(@Param('userId') userId: string) {
     return this.examService.findByUser(userId);
   }
+  
+  @Delete(':userId/:subject')
+  @ApiOperation({ summary: '사용자의 특정 과목 시험 삭제' })
+  @ApiParam({ name: 'userId', description: '사용자 ID' })
+  @ApiParam({ name: 'subject', description: '과목명' })
+  deleteExamBySubject(
+    @Param('userId') userId: string,
+    @Param('subject') subject: string,
+  ) {
+    return this.examService.deleteExamWithChaptersByUser(userId, subject);
+  }
+
+  @Delete(':userId')
+  @ApiOperation({ summary: '사용자의 모든 시험 정보 삭제 ' })
+  @ApiParam({ name: 'userId', description: '사용자 ID' })
+  deleteAllExams(@Param('userId') userId: string) {
+  return this.examService.deleteAllExamsByUser(userId);
+}
 
   // JWT 보호 적용
   // @Get(':userId')
