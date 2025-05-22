@@ -34,7 +34,7 @@ let ExamService = class ExamService {
                 chapters: {
                     create: exam.chapters.map((ch) => ({
                         chapterTitle: ch.chapterTitle,
-                        difficulty: ch.difficulty,
+                        difficulty: String(ch.difficulty),
                         contentVolume: ch.contentVolume,
                     })),
                 },
@@ -65,6 +65,35 @@ let ExamService = class ExamService {
             orderBy: { createdAt: 'desc' },
             include: { chapters: true },
         });
+    }
+    async deleteExamWithChaptersByUser(userId, subject) {
+        const user = await this.prisma.user.findUnique({
+            where: { userId },
+        });
+        if (!user)
+            throw new Error('사용자를 찾을 수 없습니다.');
+        const exam = await this.prisma.exam.findFirst({
+            where: {
+                userId: user.id,
+                subject,
+            },
+        });
+        if (!exam) {
+            return { message: '해당 과목의 시험 정보가 없습니다.' };
+        }
+        await this.prisma.chapter.deleteMany({
+            where: {
+                examId: exam.id,
+            },
+        });
+        await this.prisma.exam.delete({
+            where: {
+                id: exam.id,
+            },
+        });
+        return {
+            message: `과목 "${subject}"에 대한 시험과 챕터가 삭제되었습니다.`,
+        };
     }
 };
 exports.ExamService = ExamService;

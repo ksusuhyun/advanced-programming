@@ -22,7 +22,7 @@ __decorate([
     __metadata("design:type", String)
 ], ChapterInfoDto.prototype, "chapterTitle", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ example: 3, description: '난이도 (1~5)' }),
+    (0, swagger_1.ApiProperty)({ example: "쉬움", description: '난이도 (쉬움, 보통, 어려움)' }),
     __metadata("design:type", Number)
 ], ChapterInfoDto.prototype, "difficulty", void 0);
 __decorate([

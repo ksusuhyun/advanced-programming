@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PlannerService = void 0;
 const common_1 = require("@nestjs/common");
 const notion_service_1 = require("../notion/notion.service");
+const date_fns_1 = require("date-fns");
 let PlannerService = class PlannerService {
     notionService;
     constructor(notionService) {
@@ -36,15 +37,14 @@ let PlannerService = class PlannerService {
     }
     async confirmPlan(id, dto) {
         for (const entry of dto.dailyPlan) {
-            const [date, content] = entry.split(':').map(v => v.trim());
-            const [month, day] = date.split('/');
-            const paddedMonth = month.padStart(2, '0');
-            const paddedDay = day.padStart(2, '0');
-            const formattedDate = `2025-${paddedMonth}-${paddedDay}`;
+            const [date, content] = entry.split(':').map((v) => v.trim());
+            const parsed = (0, date_fns_1.parse)(date, 'M/d', new Date(dto.startDate));
+            const formattedDate = (0, date_fns_1.format)(parsed, 'yyyy-MM-dd');
             await this.notionService.addPlanEntry({
+                userId: dto.userId,
                 subject: dto.subject,
                 date: formattedDate,
-                content: content,
+                content,
                 databaseId: dto.databaseId,
             });
         }

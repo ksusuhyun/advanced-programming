@@ -33,14 +33,13 @@ let AiPlannerService = class AiPlannerService {
         }
         const mergedSubjects = this.mergeSubjects(exams);
         const prompt = this.createPrompt(mergedSubjects, preference);
-        const hfApiKey = this.configService.get('HF_API_KEY');
-        const hfModel = this.configService.get('HF_MODEL');
-        const HF_API_URL = `https://api-inference.huggingface.co/models/${hfModel}`;
-        const headers = {
-            Authorization: `Bearer ${hfApiKey}`,
-            'Content-Type': 'application/json',
-        };
-        const response = await axios_1.default.post(HF_API_URL, { inputs: prompt }, { headers, timeout: 120000 });
+        const HF_API_URL = 'http://localhost:8000/v1/completions';
+        const response = await axios_1.default.post(HF_API_URL, {
+            model: 'openchat',
+            prompt: prompt,
+            max_tokens: 1024,
+            temperature: 0.7,
+        });
         const rawText = response.data?.[0]?.generated_text ?? response.data;
         const jsonMatch = rawText.match(/\[\s*{[\s\S]*?}\s*\]/);
         if (!jsonMatch) {
