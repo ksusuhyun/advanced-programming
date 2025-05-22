@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SyncToNotionDto = void 0;
 const swagger_1 = require("@nestjs/swagger");
 class SyncToNotionDto {
+    userId;
     subject;
     startDate;
     endDate;
@@ -19,6 +20,10 @@ class SyncToNotionDto {
     databaseId;
 }
 exports.SyncToNotionDto = SyncToNotionDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'user123' }),
+    __metadata("design:type", String)
+], SyncToNotionDto.prototype, "userId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ example: '수학' }),
     __metadata("design:type", String)

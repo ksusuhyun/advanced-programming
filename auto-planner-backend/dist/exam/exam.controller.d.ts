@@ -10,7 +10,7 @@ export declare class ExamController {
                 id: number;
                 createdAt: Date;
                 chapterTitle: string;
-                difficulty: number;
+                difficulty: string;
                 contentVolume: number;
                 updatedAt: Date;
                 examId: number;
@@ -33,7 +33,7 @@ export declare class ExamController {
                 id: number;
                 createdAt: Date;
                 chapterTitle: string;
-                difficulty: number;
+                difficulty: string;
                 contentVolume: number;
                 updatedAt: Date;
                 examId: number;
@@ -48,5 +48,8 @@ export declare class ExamController {
             importance: number;
             updatedAt: Date;
         })[];
+    }>;
+    deleteExamBySubject(userId: string, subject: string): Promise<{
+        message: string;
     }>;
 }

@@ -17,13 +17,13 @@ model StudyPreference {
 }
 
 model User {
-  id             Int              @id @default(autoincrement())
-  userId         String           @unique
-  password       String
-  tokenFreeLogin Boolean          @default(true)
-  createdAt      DateTime         @default(now())
-  exams          Exam[]
-  preference     StudyPreference?
+  id                Int              @id @default(autoincrement())
+  userId            String           @unique
+  password          String
+  tokenFreeLogin    Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  exams             Exam[]
+  preference        StudyPreference?
 }
 
 model Exam {
@@ -43,7 +43,7 @@ model Chapter {
   id            Int      @id @default(autoincrement())
   examId        Int
   chapterTitle  String
-  difficulty    Int
+  difficulty    String
   contentVolume Int
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

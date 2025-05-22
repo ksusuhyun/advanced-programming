@@ -10,7 +10,7 @@ export declare class ExamService {
                 id: number;
                 createdAt: Date;
                 chapterTitle: string;
-                difficulty: number;
+                difficulty: string;
                 contentVolume: number;
                 updatedAt: Date;
                 examId: number;
@@ -33,7 +33,7 @@ export declare class ExamService {
                 id: number;
                 createdAt: Date;
                 chapterTitle: string;
-                difficulty: number;
+                difficulty: string;
                 contentVolume: number;
                 updatedAt: Date;
                 examId: number;
@@ -54,7 +54,7 @@ export declare class ExamService {
             id: number;
             createdAt: Date;
             chapterTitle: string;
-            difficulty: number;
+            difficulty: string;
             contentVolume: number;
             updatedAt: Date;
             examId: number;
@@ -69,4 +69,7 @@ export declare class ExamService {
         importance: number;
         updatedAt: Date;
     }) | null>;
+    deleteExamWithChaptersByUser(userId: string, subject: string): Promise<{
+        message: string;
+    }>;
 }
