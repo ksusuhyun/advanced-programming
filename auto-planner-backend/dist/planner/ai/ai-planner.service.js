@@ -14,116 +14,86 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const user_preference_service_1 = require("../../user-preference/user-preference.service");
 const exam_service_1 = require("../../exam/exam.service");
-const notion_service_1 = require("../../notion/notion.service");
 const axios_1 = require("axios");
+const date_fns_1 = require("date-fns");
 let AiPlannerService = class AiPlannerService {
     configService;
     userPreferenceService;
     examService;
-    notionService;
-    constructor(configService, userPreferenceService, examService, notionService) {
+    constructor(configService, userPreferenceService, examService) {
         this.configService = configService;
         this.userPreferenceService = userPreferenceService;
         this.examService = examService;
-        this.notionService = notionService;
     }
     async generateStudyPlanByUserId(userId) {
         const preference = await this.userPreferenceService.findByUserId(userId);
-        const exam = await this.examService.findLatestByUserId(userId);
-        if (!preference || !exam)
-            throw new common_1.InternalServerErrorException('필수 정보가 없습니다');
-        const prompt = this.createPrompt(exam, preference);
+        const { exams } = await this.examService.findByUser(userId);
+        if (!preference || !exams || exams.length === 0) {
+            throw new common_1.InternalServerErrorException('필수 정보가 부족합니다.');
+        }
+        const mergedSubjects = this.mergeSubjects(exams);
+        const prompt = this.createPrompt(mergedSubjects, preference);
         const hfApiKey = this.configService.get('HF_API_KEY');
         const hfModel = this.configService.get('HF_MODEL');
-        try {
-            const response = await axios_1.default.post(`https://api-inference.huggingface.co/models/${hfModel}`, { inputs: prompt }, {
-                headers: {
-                    Authorization: `Bearer ${hfApiKey}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-            const rawText = response.data?.[0]?.generated_text || response.data;
-            console.log('📋 AI 원시 응답:', rawText);
-            let parsed;
-            try {
-                parsed = typeof rawText === 'string' ? JSON.parse(rawText) : rawText;
-                console.log('🧩 파싱된 JSON:', parsed);
-            }
-            catch (e) {
-                console.error('❌ JSON 파싱 실패:', rawText);
-                throw new common_1.InternalServerErrorException('❌ AI 응답이 JSON 형식이 아닙니다');
-            }
-            const optimized = this.optimizeResponse(parsed, exam.startDate.toISOString());
-            const notionFormatted = this.convertToNotionFormat(exam.subject, exam.startDate.toISOString(), exam.endDate.toISOString(), optimized);
-            console.log('🗓️ Notion 업로드용 포맷:', notionFormatted);
-            await this.notionService.syncToNotion({
-                subject: exam.subject,
-                startDate: exam.startDate.toISOString(),
-                endDate: exam.endDate.toISOString(),
-                databaseId: this.configService.get('DATABASE_ID'),
-                dailyPlan: notionFormatted,
-            });
-            return {
-                message: '✅ 학습 계획이 생성되어 Notion에 저장되었습니다.',
-                notionPreview: notionFormatted,
-            };
+        const HF_API_URL = `https://api-inference.huggingface.co/models/${hfModel}`;
+        const headers = {
+            Authorization: `Bearer ${hfApiKey}`,
+            'Content-Type': 'application/json',
+        };
+        const response = await axios_1.default.post(HF_API_URL, { inputs: prompt }, { headers, timeout: 120000 });
+        const rawText = response.data?.[0]?.generated_text ?? response.data;
+        const jsonMatch = rawText.match(/\[\s*{[\s\S]*?}\s*\]/);
+        if (!jsonMatch) {
+            console.error('❌ JSON 파싱 실패:', rawText);
+            throw new common_1.InternalServerErrorException('AI 응답이 올바른 JSON 배열 형식이 아닙니다.');
         }
-        catch (err) {
-            console.error('[AI 오류]', err);
-            throw new common_1.InternalServerErrorException('AI 응답 처리 실패');
+        const parsed = JSON.parse(jsonMatch[0]);
+        return parsed;
+    }
+    mergeSubjects(exams) {
+        const grouped = {};
+        for (const exam of exams) {
+            const key = exam.subject;
+            if (!grouped[key]) {
+                grouped[key] = {
+                    subject: exam.subject,
+                    startDate: exam.startDate,
+                    endDate: exam.endDate,
+                    chapters: [...exam.chapters],
+                };
+            }
+            else {
+                if ((0, date_fns_1.isBefore)(new Date(exam.startDate), new Date(grouped[key].startDate))) {
+                    grouped[key].startDate = exam.startDate;
+                }
+                if (new Date(exam.endDate) > new Date(grouped[key].endDate)) {
+                    grouped[key].endDate = exam.endDate;
+                }
+                grouped[key].chapters.push(...exam.chapters);
+            }
         }
+        return Object.values(grouped);
     }
-    createPrompt(dto, pref) {
-        const chapters = dto.chapters
-            .map((ch, i) => `Chapter ${i + 1}: "${ch.chapterTitle}", 난이도: ${ch.difficulty}, 분량: ${ch.contentVolume}`)
-            .join('\n');
-        return [
-            '당신은 학습 계획을 세우는 인공지능입니다.',
-            '아래 정보를 기반으로 하루 단위 학습 일정을 **정확한 JSON 배열**로 만들어 주세요.',
-            '설명 없이 JSON만 출력하세요. 백틱(`)은 쓰지 마세요.',
-            '⚠️ summary_text 같은 설명은 포함하지 마세요.',
+    createPrompt(subjects, pref) {
+        const lines = [
+            'You are an AI that returns ONLY a JSON array in the following format:',
+            '[{"subject": "과목명", "startDate": "yyyy-MM-dd", "endDate": "yyyy-MM-dd", "dailyPlan": ["6/1: 과목명 - 챕터명"]}]',
             '',
-            '[사용자 정보]',
-            `- 학습 스타일: ${pref.style === 'focus' ? '하루 한 과목 집중' : '여러 과목 병행'}`,
-            `- 학습 요일: ${pref.studyDays.join(', ')}`,
-            `- 하루 학습 세션 수: ${pref.sessionsPerDay}`,
-            `- 기상 유형: ${pref.wakeTime === 'morning' ? '오전형(9시 시작)' : '야행성(18시 시작)'}`,
+            'DO NOT add any explanation, headers, or notes.',
             '',
-            '[시험 정보]',
-            `- 과목: ${dto.subject}`,
-            `- 학습 기간: ${dto.startDate} ~ ${dto.endDate}`,
-            `- 중요도: ${dto.importance}/5`,
-            '- 챕터 목록:',
-            chapters,
+            `User Preferences:`,
+            `- Style: ${pref.style === 'focus' ? 'Focused' : 'Multi'}`,
+            `- Study Days: ${pref.studyDays.join(', ')}`,
+            `- Sessions per Day: ${pref.sessionsPerDay}`,
             '',
-            '규칙:',
-            '1. 모든 챕터를 남은 일수에 균등하게 분배하세요.',
-            '2. 하루 단위로 "day"를 지정하고, 해당 날짜의 "chapters"를 배열로 제공하세요.',
-            '3. 복습 또는 휴식일도 포함되면 좋습니다.',
-            '',
-            '예시 출력:',
-            '[{ "day": 1, "chapters": ["Chapter 1", "Chapter 2"] }, { "day": 2, "chapters": ["Chapter 3"] }]',
-        ].join('\n');
-    }
-    optimizeResponse(parsed, startDate) {
-        const { format, addDays } = require('date-fns');
-        return parsed.map((item, index) => {
-            const currentDate = addDays(new Date(startDate), index);
-            return {
-                date: format(currentDate, 'yyyy-MM-dd'),
-                day: item.day || index + 1,
-                tasks: item.chapters || [],
-            };
-        });
-    }
-    convertToNotionFormat(subject, startDate, endDate, optimized) {
-        const { format, parseISO } = require('date-fns');
-        return optimized.map((item) => {
-            const dateObj = parseISO(item.date);
-            const monthDay = format(dateObj, 'M/d');
-            const taskText = item.tasks.join(', ');
-            return `${monthDay}: ${taskText}`;
-        });
+            'Exams:',
+        ];
+        for (const subj of subjects) {
+            const chapters = subj.chapters.map((ch, i) => `Chapter ${i + 1}: ${ch.chapterTitle}`).join(', ');
+            lines.push(`- Subject: ${subj.subject}`, `  Period: ${new Date(subj.startDate).toDateString()} ~ ${new Date(subj.endDate).toDateString()}`, `  Chapters: ${chapters}`, '');
+        }
+        lines.push('Only return the JSON array.');
+        return lines.join('\n');
     }
 };
 exports.AiPlannerService = AiPlannerService;
@@ -131,7 +101,6 @@ exports.AiPlannerService = AiPlannerService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [config_1.ConfigService,
         user_preference_service_1.UserPreferenceService,
-        exam_service_1.ExamService,
-        notion_service_1.NotionService])
+        exam_service_1.ExamService])
 ], AiPlannerService);
 //# sourceMappingURL=ai-planner.service.js.map

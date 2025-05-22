@@ -1,5 +1,9 @@
 <script>
-  // 카드 관련 로직 (예: 버튼 클릭 시 동작)은 여기에 추가될 수 있습니다.
+  import { goto } from '$app/navigation';
+
+  function handleGoToExam() {
+    goto('/exam');
+  }
 </script>
 
 <div class="plan-card">
@@ -13,7 +17,7 @@
   </div>
   <h2 class="card-title">학습 계획 만들기</h2>
   <p class="card-description">AI가 추천하는 맞춤형 학습 일정을 생성하세요</p>
-  <button class="card-button">
+  <button class="card-button" on:click={handleGoToExam}>
     <span class="button-text">계획 생성</span>
     <!-- Figma 노드 6:552 (svg)에 해당하는 아이콘. 간단한 화살표로 대체 -->
     <span class="button-icon">→</span>
