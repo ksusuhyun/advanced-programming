@@ -39,6 +39,10 @@ export class AuthController {
     @Query('state') userId: string,
     @Res() res: Response,
   ) {
+    // ✅ 여기 로그 추가
+    console.log('✅ [콜백 진입]');
+    console.log('🔍 code:', code);
+    console.log('🔍 state:', userId);
     const clientId = process.env.NOTION_CLIENT_ID as string;
     const clientSecret = process.env.NOTION_CLIENT_SECRET as string;
     const redirectUri = process.env.NOTION_REDIRECT_URI as string;
