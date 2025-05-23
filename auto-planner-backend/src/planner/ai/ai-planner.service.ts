@@ -82,19 +82,23 @@ export class AiPlannerService {
   }
 
   private createPrompt(subjects: Subject[], pref: Preference): string {
-    const lines = [
-      "You are an assistant that returns ONLY a valid JSON array, no explanations.",
-      "Each array item must have: subject, startDate, endDate, and dailyPlan.",
-      "Each dailyPlan entry MUST include a page range (e.g., (p.23-34)).",
-      "Do NOT include any text before or after the JSON array.",
-      "",
-      "User Preferences:",
-      `- Style: ${pref.style === 'focus' ? 'Focused' : 'Multi'}`,
-      `- Study Days: ${pref.studyDays.join(', ')}`,
-      `- Sessions per Day: ${pref.sessionsPerDay}`,
-      "",
-      "Exams:",
-    ];
+    const prompt = `
+    # Generate a study schedule as a JSON array only.
+    # Each item format: {subject, startDate, endDate, dailyPlan[]}
+    # Use study preferences below.
+    # Each dailyPlan must include a page range like (p.1-10)
+
+    Preferences:
+    style: ${pref.style}
+    studyDays: ${pref.studyDays.join(',')}
+    sessionsPerDay: ${pref.sessionsPerDay}
+
+    Subjects:
+    ${subjects.map(s => `- ${s.subject} (${s.startDate} ~ ${s.endDate}): ${s.chapters.map(c => `${c.chapterTitle}(${c.contentVolume}p)`).join(', ')}`).join('\n')}
+
+    Respond only with a JSON array.
+    `;
+
 
     for (const subj of subjects) {
       const chapters = subj.chapters
