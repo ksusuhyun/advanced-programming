@@ -9,6 +9,7 @@ import { LLMClientService } from './llm-client.service';
 
 @Module({
   imports: [
+    NotionModule,
     HttpModule, // HTTP 요청 기능을 위해 HttpModule 추가
     UserPreferenceModule, // ✅ 사용자 선호도 조회를 위해 필요
     ExamModule,            // ✅ 시험 정보 조회를 위해 필요

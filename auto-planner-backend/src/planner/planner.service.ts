@@ -79,7 +79,7 @@
 // }
 
 import { Injectable } from '@nestjs/common';
-import { GeneratePlanDto } from './dto/generate-plan.dto';
+import { GeneratePlanDto } from './ai/generate-plan.dto';
 import { ConfirmPlanDto } from './dto/confirm-plan.dto';
 import { NotionService } from 'src/notion/notion.service';
 import { parse, format } from 'date-fns';
