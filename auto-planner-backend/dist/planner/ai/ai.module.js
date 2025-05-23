@@ -21,6 +21,7 @@ exports.AiModule = AiModule;
 exports.AiModule = AiModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            notion_module_1.NotionModule,
             axios_1.HttpModule,
             user_preference_module_1.UserPreferenceModule,
             exam_module_1.ExamModule,
