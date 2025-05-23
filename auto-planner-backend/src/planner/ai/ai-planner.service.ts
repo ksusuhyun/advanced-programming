@@ -4,15 +4,11 @@ import { UserPreferenceService } from '../../user-preference/user-preference.ser
 import { ExamService } from '../../exam/exam.service';
 import { LLMClientService } from './llm-client.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
-interface Preference {
-  style: string;
-  studyDays: string[];
-  sessionsPerDay: number;
-}
 
 interface Chapter {
   chapterTitle: string;
-  contentVolume?: number; // optional, 필요하면 추가
+  contentVolume: number;
+  difficulty: string;
 }
 
 interface Subject {
@@ -22,6 +18,17 @@ interface Subject {
   chapters: Chapter[];
 }
 
+interface ChapterSlice {
+  subject: string;
+  title: string;
+  pageRange: string;
+}
+
+const PAGE_LIMIT_BY_DIFFICULTY: Record<string, number> = {
+  '상': 5,
+  '중': 10,
+  '하': 15,
+};
 
 @Injectable()
 export class AiPlannerService {
@@ -35,17 +42,16 @@ export class AiPlannerService {
   async generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]> {
     const preference = await this.userPreferenceService.findByUserId(userId);
     const { exams } = await this.examService.findByUser(userId);
-    console.log('✅ preference:', preference);
-    console.log('✅ exams:', exams);
 
     if (!preference || !exams || exams.length === 0) {
       throw new InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
     }
 
     const mergedSubjects = this.mergeSubjects(exams);
-    const prompt = this.createPrompt(mergedSubjects, preference);
+    const chapterSlices = this.flattenChapters(mergedSubjects);
+    const prompt = this.createPromptFromSlices(chapterSlices, preference);
 
-    const raw = await this.llmClient.generate(prompt);  // 이미 object[]로 반환됨
+    const raw = await this.llmClient.generate(prompt);
 
     if (!Array.isArray(raw)) {
       console.error('❌ LLM 응답이 배열이 아님:', raw);
@@ -55,7 +61,7 @@ export class AiPlannerService {
     return raw;
   }
 
-  private mergeSubjects(exams: any[]): any[] {
+  private mergeSubjects(exams: any[]): Subject[] {
     const grouped: Record<string, any> = {};
 
     for (const exam of exams) {
@@ -81,36 +87,49 @@ export class AiPlannerService {
     return Object.values(grouped);
   }
 
-  private createPrompt(subjects: Subject[], pref: Preference): string {
-    const prompt = `
-    # Generate a study schedule as a JSON array only.
-    # Each item format: {subject, startDate, endDate, dailyPlan[]}
-    # Use study preferences below.
-    # Each dailyPlan must include a page range like (p.1-10)
+  private sliceChapter(chapter: Chapter): ChapterSlice[] {
+    const { chapterTitle, contentVolume, difficulty } = chapter;
+    const limit = PAGE_LIMIT_BY_DIFFICULTY[difficulty] ?? 10;
+    const slices: ChapterSlice[] = [];
 
-    Preferences:
-    style: ${pref.style}
-    studyDays: ${pref.studyDays.join(',')}
-    sessionsPerDay: ${pref.sessionsPerDay}
-
-    Subjects:
-    ${subjects.map(s => `- ${s.subject} (${s.startDate} ~ ${s.endDate}): ${s.chapters.map(c => `${c.chapterTitle}(${c.contentVolume}p)`).join(', ')}`).join('\n')}
-
-    Respond only with a JSON array.
-    `;
-
-
-    for (const subj of subjects) {
-      const chapters = subj.chapters
-        .map((ch, i) => `Chapter ${i + 1}: ${ch.chapterTitle}`) // 페이지 정보 있다면 (p.XX-YY) 붙이기
-        .join(', ');
-      lines.push(
-        `- Subject: ${subj.subject}`,
-        `  Period: ${new Date(subj.startDate).toDateString()} ~ ${new Date(subj.endDate).toDateString()}`,
-        `  Chapters: ${chapters}`,
-        ""
-      );
+    let pageStart = 1;
+    while (pageStart <= contentVolume) {
+      const pageEnd = Math.min(pageStart + limit - 1, contentVolume);
+      slices.push({
+        title: chapterTitle,
+        pageRange: `(p.${pageStart}-${pageEnd})`,
+        subject: '', // subject는 나중에 추가됨
+      });
+      pageStart = pageEnd + 1;
     }
+
+    return slices;
+  }
+
+  private flattenChapters(subjects: Subject[]): ChapterSlice[] {
+    const slices: ChapterSlice[] = [];
+    for (const subject of subjects) {
+      for (const chapter of subject.chapters) {
+        const chapterSlices = this.sliceChapter(chapter);
+        slices.push(...chapterSlices.map(slice => ({ ...slice, subject: subject.subject })));
+      }
+    }
+    return slices;
+  }
+
+  private createPromptFromSlices(slices: ChapterSlice[], pref: any): string {
+    const lines = [
+      '# You are a planner assistant.',
+      '# Given the list of chapter slices, assign them to study days within the allowed period.',
+      `# Each day can contain up to ${pref.sessionsPerDay} items.`,
+      `# Use only the allowed weekdays: ${pref.studyDays.join(', ')}`,
+      '# Output only JSON array like:',
+      '# [{ "subject": "...", "date": "6/1", "content": "챕터명 (p.1-5)" }, ...]',
+      '',
+      'Slices:'
+    ];
+
+    lines.push(...slices.map((s, i) => `${i + 1}. ${s.subject} - ${s.title} ${s.pageRange}`));
 
     return lines.join('\n');
   }
