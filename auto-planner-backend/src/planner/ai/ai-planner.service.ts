@@ -5,7 +5,7 @@ import { ExamService } from '../../exam/exam.service';
 import { LLMClientService } from './llm-client.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
 import { NotionService } from '../../notion/notion.service';
-
+import { generateAIBasedPlan } from './utils/ai-mapper';
 
 interface Chapter {
   chapterTitle: string;
@@ -51,25 +51,15 @@ export class AiPlannerService {
     }
 
     const mergedSubjects = this.mergeSubjects(exams);
-    const chapterSlices = this.flattenChapters(mergedSubjects);
-    const prompt = this.createPromptFromSlices(chapterSlices, preference);
+    const slices = this.flattenChapters(mergedSubjects);
+    const prompt = this.createPromptFromSlices(slices, preference);
 
     const raw = await this.llmClient.generate(prompt);
 
-    if (!Array.isArray(raw)) {
-      throw new InternalServerErrorException('LLM 응답이 JSON 배열 형식이 아닙니다.');
-    }
+    const databaseId = this.configService.get<string>('DATABASE_ID');
+    if (!databaseId) throw new InternalServerErrorException('❌ DATABASE_ID 누락');
 
-    const databaseId = this.configService.get('DATABASE_ID');
-    const notionDtos = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, raw);
-
-    // ✅ Notion 연동 수행
-    for (const dto of notionDtos) {
-      await this.notionService.syncToNotion(dto);
-    }
-
-    return notionDtos; // optional: Notion에 등록된 정보도 반환
-
+    return this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, raw);
   }
 
   private groupDailyPlansBySubject(

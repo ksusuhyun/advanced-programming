@@ -15,33 +15,61 @@ const config_1 = require("@nestjs/config");
 const user_preference_service_1 = require("../../user-preference/user-preference.service");
 const exam_service_1 = require("../../exam/exam.service");
 const llm_client_service_1 = require("./llm-client.service");
+const notion_service_1 = require("../../notion/notion.service");
+const PAGE_LIMIT_BY_DIFFICULTY = {
+    '상': 5,
+    '중': 10,
+    '하': 15,
+};
 let AiPlannerService = class AiPlannerService {
     configService;
     userPreferenceService;
     examService;
     llmClient;
-    constructor(configService, userPreferenceService, examService, llmClient) {
+    notionService;
+    constructor(configService, userPreferenceService, examService, llmClient, notionService) {
         this.configService = configService;
         this.userPreferenceService = userPreferenceService;
         this.examService = examService;
         this.llmClient = llmClient;
+        this.notionService = notionService;
     }
     async generateStudyPlanByUserId(userId) {
         const preference = await this.userPreferenceService.findByUserId(userId);
         const { exams } = await this.examService.findByUser(userId);
-        console.log('✅ preference:', preference);
-        console.log('✅ exams:', exams);
         if (!preference || !exams || exams.length === 0) {
             throw new common_1.InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
         }
         const mergedSubjects = this.mergeSubjects(exams);
-        const prompt = this.createPrompt(mergedSubjects, preference);
+        const slices = this.flattenChapters(mergedSubjects);
+        const prompt = this.createPromptFromSlices(slices, preference);
         const raw = await this.llmClient.generate(prompt);
-        if (!Array.isArray(raw)) {
-            console.error('❌ LLM 응답이 배열이 아님:', raw);
-            throw new common_1.InternalServerErrorException('LLM 응답이 JSON 배열 형식이 아닙니다.');
+        const databaseId = this.configService.get('DATABASE_ID');
+        if (!databaseId)
+            throw new common_1.InternalServerErrorException('❌ DATABASE_ID 누락');
+        return this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, raw);
+    }
+    groupDailyPlansBySubject(userId, databaseId, subjects, llmResponse) {
+        const grouped = {};
+        for (const item of llmResponse) {
+            if (!grouped[item.subject]) {
+                grouped[item.subject] = [];
+            }
+            grouped[item.subject].push(`${item.date}: ${item.content}`);
         }
-        return raw;
+        return Object.entries(grouped).map(([subject, dailyPlan]) => {
+            const matchedSubject = subjects.find((s) => s.subject === subject);
+            if (!matchedSubject)
+                throw new Error(`❌ 과목 일치 실패: ${subject}`);
+            return {
+                userId,
+                subject,
+                startDate: matchedSubject.startDate,
+                endDate: matchedSubject.endDate,
+                dailyPlan,
+                databaseId,
+            };
+        });
     }
     mergeSubjects(exams) {
         const grouped = {};
@@ -67,26 +95,44 @@ let AiPlannerService = class AiPlannerService {
         }
         return Object.values(grouped);
     }
-    createPrompt(subjects, pref) {
-        const lines = [
-            "You are an assistant that returns ONLY a valid JSON array, no explanations.",
-            "Each array item must have: subject, startDate, endDate, and dailyPlan.",
-            "Each dailyPlan entry MUST include a page range (e.g., (p.23-34)).",
-            "Do NOT include any text before or after the JSON array.",
-            "",
-            "User Preferences:",
-            `- Style: ${pref.style === 'focus' ? 'Focused' : 'Multi'}`,
-            `- Study Days: ${pref.studyDays.join(', ')}`,
-            `- Sessions per Day: ${pref.sessionsPerDay}`,
-            "",
-            "Exams:",
-        ];
-        for (const subj of subjects) {
-            const chapters = subj.chapters
-                .map((ch, i) => `Chapter ${i + 1}: ${ch.chapterTitle}`)
-                .join(', ');
-            lines.push(`- Subject: ${subj.subject}`, `  Period: ${new Date(subj.startDate).toDateString()} ~ ${new Date(subj.endDate).toDateString()}`, `  Chapters: ${chapters}`, "");
+    sliceChapter(chapter) {
+        const { chapterTitle, contentVolume, difficulty } = chapter;
+        const limit = PAGE_LIMIT_BY_DIFFICULTY[difficulty] ?? 10;
+        const slices = [];
+        let pageStart = 1;
+        while (pageStart <= contentVolume) {
+            const pageEnd = Math.min(pageStart + limit - 1, contentVolume);
+            slices.push({
+                title: chapterTitle,
+                pageRange: `(p.${pageStart}-${pageEnd})`,
+                subject: '',
+            });
+            pageStart = pageEnd + 1;
         }
+        return slices;
+    }
+    flattenChapters(subjects) {
+        const slices = [];
+        for (const subject of subjects) {
+            for (const chapter of subject.chapters) {
+                const chapterSlices = this.sliceChapter(chapter);
+                slices.push(...chapterSlices.map(slice => ({ ...slice, subject: subject.subject })));
+            }
+        }
+        return slices;
+    }
+    createPromptFromSlices(slices, pref) {
+        const lines = [
+            '# You are a planner assistant.',
+            '# Given the list of chapter slices, assign them to study days within the allowed period.',
+            `# Each day can contain up to ${pref.sessionsPerDay} items.`,
+            `# Use only the allowed weekdays: ${pref.studyDays.join(', ')}`,
+            '# Output only JSON array like:',
+            '# [{ "subject": "...", "date": "6/1", "content": "챕터명 (p.1-5)" }, ...]',
+            '',
+            'Slices:'
+        ];
+        lines.push(...slices.map((s, i) => `${i + 1}. ${s.subject} - ${s.title} ${s.pageRange}`));
         return lines.join('\n');
     }
 };
@@ -96,6 +142,7 @@ exports.AiPlannerService = AiPlannerService = __decorate([
     __metadata("design:paramtypes", [config_1.ConfigService,
         user_preference_service_1.UserPreferenceService,
         exam_service_1.ExamService,
-        llm_client_service_1.LLMClientService])
+        llm_client_service_1.LLMClientService,
+        notion_service_1.NotionService])
 ], AiPlannerService);
 //# sourceMappingURL=ai-planner.service.js.map
