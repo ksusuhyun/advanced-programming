@@ -4,6 +4,8 @@ import { UserPreferenceService } from '../../user-preference/user-preference.ser
 import { ExamService } from '../../exam/exam.service';
 import { LLMClientService } from './llm-client.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
+import { NotionService } from '../../notion/notion.service';
+
 
 interface Chapter {
   chapterTitle: string;
@@ -37,6 +39,7 @@ export class AiPlannerService {
     private readonly userPreferenceService: UserPreferenceService,
     private readonly examService: ExamService,
     private readonly llmClient: LLMClientService,
+    private readonly notionService: NotionService,
   ) {}
 
   async generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]> {
@@ -54,11 +57,49 @@ export class AiPlannerService {
     const raw = await this.llmClient.generate(prompt);
 
     if (!Array.isArray(raw)) {
-      console.error('❌ LLM 응답이 배열이 아님:', raw);
       throw new InternalServerErrorException('LLM 응답이 JSON 배열 형식이 아닙니다.');
     }
 
-    return raw;
+    const databaseId = this.configService.get('DATABASE_ID');
+    const notionDtos = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, raw);
+
+    // ✅ Notion 연동 수행
+    for (const dto of notionDtos) {
+      await this.notionService.syncToNotion(dto);
+    }
+
+    return notionDtos; // optional: Notion에 등록된 정보도 반환
+
+  }
+
+  private groupDailyPlansBySubject(
+    userId: string,
+    databaseId: string,
+    subjects: Subject[],
+    llmResponse: any[]
+  ): SyncToNotionDto[] {
+    const grouped: Record<string, string[]> = {};
+
+    for (const item of llmResponse) {
+      if (!grouped[item.subject]) {
+        grouped[item.subject] = [];
+      }
+      grouped[item.subject].push(`${item.date}: ${item.content}`);
+    }
+
+    return Object.entries(grouped).map(([subject, dailyPlan]) => {
+      const matchedSubject = subjects.find((s) => s.subject === subject);
+      if (!matchedSubject) throw new Error(`❌ 과목 일치 실패: ${subject}`);
+
+      return {
+        userId,
+        subject,
+        startDate: matchedSubject.startDate,
+        endDate: matchedSubject.endDate,
+        dailyPlan,
+        databaseId,
+      };
+    });
   }
 
   private mergeSubjects(exams: any[]): Subject[] {
