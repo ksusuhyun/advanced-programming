@@ -5,7 +5,7 @@ import { ExamService } from '../../exam/exam.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
 import { NotionService } from '../../notion/notion.service';
 import { LlmClientService } from '../server/llm-client.service';
-import { eachDayOfInterval, format, parseISO } from 'date-fns';
+import { getAllStudyDates } from './utils/date-utils';
 
 interface Chapter {
   chapterTitle: string;
@@ -37,6 +37,7 @@ export class AiPlannerService {
   ) {}
 
   async generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]> {
+    console.log('📥 generateStudyPlanByUserId called for:', userId);
     const preference = await this.userPreferenceService.findByUserId(userId);
     const style = await this.userPreferenceService.getStyle(userId);
     const { exams } = await this.examService.findByUser(userId);
@@ -47,29 +48,46 @@ export class AiPlannerService {
     const databaseId = this.configService.get<string>('DATABASE_ID');
     if (!databaseId) throw new InternalServerErrorException('❌ DATABASE_ID 누락');
 
+    const useLLM = this.configService.get<string>('USE_LLM')?.toLowerCase() === 'true';
+    console.log('🧪 USE_LLM =', useLLM);
+
     const mergedSubjects = this.mergeSubjects(exams);
+    console.log('🧪 mergedSubjects count:', mergedSubjects.length);
+
     const slices = this.flattenChapters(mergedSubjects);
-    const dates = this.getAllStudyDates(mergedSubjects, preference.studyDays);
+    console.log('🧪 Total chapter slices:', slices.length);
+
+    const dates = getAllStudyDates(mergedSubjects, preference.studyDays);
+    console.log('🧪 Study dates:', dates);
 
     let rawPlans: any[] = [];
-    const useLLM = true;
 
     if (useLLM) {
       try {
         const prompt = this.createPromptWithConstraints(slices, dates, preference, style);
+        console.log('📤 Generated prompt for LLM:', prompt);
         rawPlans = await this.llmClient.generate(prompt);
+        console.log('📥 LLM raw response received:', rawPlans);
         if (!Array.isArray(rawPlans)) throw new Error('Invalid LLM output');
       } catch (e) {
         console.warn('⚠️ LLM 실패 - fallback 사용:', (e as Error).message);
         rawPlans = this.assignChaptersByRule(slices, dates, preference.sessionsPerDay);
+        console.log('✅ fallback generated plan count:', rawPlans.length);
       }
     } else {
+      console.log('⚠️ USE_LLM=false 설정 - fallback 실행');
       rawPlans = this.assignChaptersByRule(slices, dates, preference.sessionsPerDay);
+      console.log('✅ fallback generated plan count:', rawPlans.length);
     }
 
     const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
-    for (const result of results) await this.notionService.syncToNotion(result);
+    for (const result of results) {
+      console.log('📌 Notion 동기화 시작 for subject:', result.subject);
+      await this.notionService.syncToNotion(result);
+      console.log('📌 Notion 동기화 완료 for subject:', result.subject);
+    }
 
+    console.log('✅ 전체 과정 완료. 결과 개수:', results.length);
     return this.mapResponseForClient(results);
   }
 
@@ -163,28 +181,6 @@ export class AiPlannerService {
     return slices;
   }
 
-  private getAllStudyDates(subjects: Subject[], studyDays: string[]): string[] {
-    const dayMap: Record<string, number> = {
-      Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-      Thursday: 4, Friday: 5, Saturday: 6,
-    };
-    const allowed = studyDays.map(d => dayMap[d]);
-    const allDates: Set<string> = new Set();
-
-    for (const subj of subjects) {
-      const interval = eachDayOfInterval({
-        start: parseISO(subj.startDate),
-        end: parseISO(subj.endDate),
-      });
-      for (const d of interval) {
-        if (allowed.includes(d.getDay())) {
-          allDates.add(format(d, 'M/d'));
-        }
-      }
-    }
-    return Array.from(allDates).sort();
-  }
-
   private createPromptWithConstraints(
     slices: ChapterSlice[],
     allowedDates: string[],
@@ -220,7 +216,16 @@ export class AiPlannerService {
     const result: { subject: string; date: string; content: string }[] = [];
     let i = 0;
 
-    for (const date of studyDates) {
+    const sortedDates = [...studyDates].sort((a, b) => {
+      const aD = new Date(`2025-${a}`);
+      const bD = new Date(`2025-${b}`);
+      return aD.getTime() - bD.getTime();
+    });
+
+    console.log('📆 fallback slices:', slices.length);
+    console.log('📆 fallback dates:', sortedDates);
+
+    for (const date of sortedDates) {
       for (let j = 0; j < maxPerDay && i < slices.length; j++, i++) {
         const s = slices[i];
         result.push({
@@ -230,6 +235,10 @@ export class AiPlannerService {
         });
       }
       if (i >= slices.length) break;
+    }
+
+    if (result.length < slices.length) {
+      console.warn(`⚠️ fallback 계획이 전체 slice ${slices.length}개 중 ${result.length}개만 배정됨`);
     }
 
     return result;

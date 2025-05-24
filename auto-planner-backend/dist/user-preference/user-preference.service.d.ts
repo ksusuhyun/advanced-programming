@@ -9,11 +9,11 @@ export declare class UserPreferenceService {
     private readonly prisma;
     constructor(prisma: PrismaService);
     save(userId: string, dto: UserPreferenceDto): Promise<{
+        userId: number;
         id: number;
         style: string;
         studyDays: string[];
         sessionsPerDay: number;
-        userId: number;
     }>;
     findByUserId(userId: string): Promise<StudyPreference>;
     getStyle(userId: string): Promise<'focus' | 'multi'>;

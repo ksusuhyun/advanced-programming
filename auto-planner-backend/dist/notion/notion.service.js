@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var NotionService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NotionService = void 0;
 const common_1 = require("@nestjs/common");
@@ -15,24 +16,23 @@ const config_1 = require("@nestjs/config");
 const client_1 = require("@notionhq/client");
 const date_fns_1 = require("date-fns");
 const notion_token_store_1 = require("../auth/notion-token.store");
-let NotionService = class NotionService {
+let NotionService = NotionService_1 = class NotionService {
     configService;
+    logger = new common_1.Logger(NotionService_1.name);
     constructor(configService) {
         this.configService = configService;
     }
     getClientForUser(userId) {
         const token = (0, notion_token_store_1.getToken)(userId);
+        console.log('🔐 실제 사용될 토큰:', token);
+        this.logger.log(`🔑 Loaded token for user ${userId}: ${token}`);
         if (!token) {
             throw new Error(`❌ Notion token not found for user: ${userId}`);
         }
         return new client_1.Client({ auth: token });
     }
     async addPlanEntry(data) {
-        const userToken = (0, notion_token_store_1.getToken)(data.userId);
-        if (!userToken) {
-            throw new Error(`[❌ Notion 토큰 없음] userId: ${data.userId}`);
-        }
-        const notion = new client_1.Client({ auth: userToken });
+        const notion = this.getClientForUser(data.userId);
         return await notion.pages.create({
             parent: { database_id: data.databaseId },
             properties: {
@@ -68,7 +68,7 @@ let NotionService = class NotionService {
     }
 };
 exports.NotionService = NotionService;
-exports.NotionService = NotionService = __decorate([
+exports.NotionService = NotionService = NotionService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [config_1.ConfigService])
 ], NotionService);

@@ -17,7 +17,6 @@ export declare class AiPlannerService {
     private mergeSubjects;
     private sliceChapter;
     private flattenChapters;
-    private getAllStudyDates;
     private createPromptWithConstraints;
     private assignChaptersByRule;
 }

@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { SyncToNotionDto } from './dto/sync-to-notion.dto';
 export declare class NotionService {
     private readonly configService;
+    private readonly logger;
     constructor(configService: ConfigService);
     private getClientForUser;
     addPlanEntry(data: {

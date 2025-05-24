@@ -188,15 +188,19 @@
 // // }
 
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from '@notionhq/client';
 import { parse, format } from 'date-fns';
 import { getToken } from 'src/auth/notion-token.store';
 import { SyncToNotionDto } from './dto/sync-to-notion.dto';
 
+
+
 @Injectable()
 export class NotionService {
+  private readonly logger = new Logger(NotionService.name);
+
   constructor(private readonly configService: ConfigService) {}
 
   /**
@@ -204,6 +208,10 @@ export class NotionService {
    */
   private getClientForUser(userId: string): Client {
     const token = getToken(userId);
+    // ✅ DEBUG 로그 (출력 안 되는 경우, getToken 자체 확인 필요)
+    console.log('🔐 실제 사용될 토큰:', token);
+    this.logger.log(`🔑 Loaded token for user ${userId}: ${token}`);
+
     if (!token) {
       throw new Error(`❌ Notion token not found for user: ${userId}`);
     }
@@ -220,13 +228,13 @@ export class NotionService {
     content: string;
     databaseId: string;
   }) {
-    // const notion = this.getClientForUser(data.userId);
-    const userToken = getToken(data.userId);
-    if (!userToken) {
-      throw new Error(`[❌ Notion 토큰 없음] userId: ${data.userId}`);
-    }
+    const notion = this.getClientForUser(data.userId);
+    // const userToken = getToken(data.userId);
+    // if (!userToken) {
+    //   throw new Error(`[❌ Notion 토큰 없음] userId: ${data.userId}`);
+    // }
 
-    const notion = new Client({ auth: userToken });
+    // const notion = new Client({ auth: userToken });
 
 
     return await notion.pages.create({
