@@ -56,7 +56,7 @@ async def complete(request: CompletionRequest):
         if not parsed:
             raise ValueError("❌ JSON 배열을 파싱할 수 없습니다.")
 
-        return {"result": parsed}
+        return {"generated_text": parsed}
 
     except Exception as e:
         print("❌ FastAPI LLM 처리 중 예외 발생:", e)

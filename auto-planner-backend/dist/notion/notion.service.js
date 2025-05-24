@@ -31,6 +31,13 @@ let NotionService = NotionService_1 = class NotionService {
         }
         return new client_1.Client({ auth: token });
     }
+    async clearDatabase(userId, databaseId) {
+        const notion = this.getClientForUser(userId);
+        const pages = await notion.databases.query({ database_id: databaseId });
+        for (const page of pages.results) {
+            await notion.pages.update({ page_id: page.id, archived: true });
+        }
+    }
     async addPlanEntry(data) {
         const notion = this.getClientForUser(data.userId);
         return await notion.pages.create({
@@ -49,21 +56,30 @@ let NotionService = NotionService_1 = class NotionService {
         });
     }
     async syncToNotion(dto) {
+        await this.clearDatabase(dto.userId, dto.databaseId);
+        const grouped = new Map();
         for (const entry of dto.dailyPlan) {
-            const [date, content] = entry.split(':').map((v) => v.trim());
-            const parsed = (0, date_fns_1.parse)(date, 'M/d', new Date(dto.startDate));
+            const [dateRaw, content] = entry.split(':').map(v => v.trim());
+            const parsed = (0, date_fns_1.parse)(dateRaw, 'M/d', new Date(dto.startDate));
             const formattedDate = (0, date_fns_1.format)(parsed, 'yyyy-MM-dd');
+            const key = `${dto.subject}_${formattedDate}`;
+            if (!grouped.has(key)) {
+                grouped.set(key, { date: formattedDate, contentList: [] });
+            }
+            grouped.get(key).contentList.push(content);
+        }
+        for (const { date, contentList } of grouped.values()) {
             await this.addPlanEntry({
                 userId: dto.userId,
                 subject: dto.subject,
-                date: formattedDate,
-                content: content,
+                date,
+                content: contentList.join(', '),
                 databaseId: dto.databaseId,
             });
         }
         return {
             message: '📌 Notion 연동 완료',
-            count: dto.dailyPlan.length,
+            count: grouped.size,
         };
     }
 };

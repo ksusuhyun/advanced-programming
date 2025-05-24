@@ -12,11 +12,9 @@ export declare class AiPlannerService {
     private readonly llmClient;
     constructor(configService: ConfigService, userPreferenceService: UserPreferenceService, examService: ExamService, notionService: NotionService, llmClient: LlmClientService);
     generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]>;
+    private estimateDaysByDifficulty;
+    private assignChaptersFallback;
     private mapResponseForClient;
     private groupDailyPlansBySubject;
     private mergeSubjects;
-    private sliceChapter;
-    private flattenChapters;
-    private createPromptWithConstraints;
-    private assignChaptersByRule;
 }

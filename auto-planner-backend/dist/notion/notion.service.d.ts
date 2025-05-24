@@ -5,6 +5,7 @@ export declare class NotionService {
     private readonly logger;
     constructor(configService: ConfigService);
     private getClientForUser;
+    clearDatabase(userId: string, databaseId: string): Promise<void>;
     addPlanEntry(data: {
         userId: string;
         subject: string;

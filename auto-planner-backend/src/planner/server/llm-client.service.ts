@@ -8,10 +8,6 @@ interface CompletionResult {
   content: string;
 }
 
-interface CompletionResponse {
-  result: CompletionResult[];
-}
-
 @Injectable()
 export class LlmClientService {
   constructor(private readonly httpService: HttpService) {}
@@ -19,19 +15,19 @@ export class LlmClientService {
   /**
    * FastAPI LLM 서버에 프롬프트 전송
    * @param prompt LLM에 전달할 프롬프트
-   * @param maxTokens 최대 토큰 수 (기본값 512)
+   * @param maxTokens 최대 토큰 수 (기본값 1024)
    * @param temperature 창의성 조절 파라미터 (기본값 0.0)
    */
   async generate(
     prompt: string,
-    maxTokens: number = 512,
+    maxTokens: number = 1024,
     temperature: number = 0.0,
   ): Promise<CompletionResult[]> {
     const url = 'http://127.0.0.1:8000/v1/completions';
 
     try {
       const response = await firstValueFrom(
-        this.httpService.post<CompletionResponse>(
+        this.httpService.post(
           url,
           {
             prompt,
@@ -44,13 +40,31 @@ export class LlmClientService {
         )
       );
 
-      const result = response.data?.result;
-      if (!Array.isArray(result)) {
-        console.warn('❗ FastAPI 응답 형식 오류:', response.data);
-        throw new Error('응답이 JSON 배열 형식이 아님');
+      const rawText = (response.data as any)?.generated_text || '';
+
+      const jsonStart = rawText.indexOf('[');
+      const jsonEnd = rawText.lastIndexOf(']');
+
+      if (jsonStart === -1 || jsonEnd === -1) {
+        console.warn('❗ JSON 배열 시작/끝을 찾을 수 없음:', rawText);
+        throw new Error('응답에서 유효한 JSON 배열을 찾을 수 없음');
       }
 
-      return result;
+      const jsonString = rawText.substring(jsonStart, jsonEnd + 1).trim();
+      let parsed: CompletionResult[];
+
+      try {
+        parsed = JSON.parse(jsonString);
+        if (!Array.isArray(parsed)) {
+          throw new Error('파싱된 결과가 배열이 아님');
+        }
+      } catch (parseErr) {
+        console.error('❌ JSON 파싱 실패:', parseErr);
+        console.error('🔎 원본 문자열:', jsonString);
+        throw new Error('LLM 응답 파싱 오류');
+      }
+
+      return parsed;
     } catch (error: any) {
       console.error('❌ LLM 서버 요청 실패:', error.message || error);
       throw new HttpException(
