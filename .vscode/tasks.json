@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Clean dist",
+      "type": "shell",
+      "command": "rm -rf dist",
+      "options": {
+        "cwd": "auto-planner-backend"
+      }
+    },
+    {
+      "label": "NestJS Server",
+      "type": "shell",
+      "command": "npm run start:dev",
+      "options": {
+        "cwd": "auto-planner-backend"
+      },
+      "dependsOn": ["Clean dist"],
+      "group": "build"
+    },
+    {
+      "label": "LLM Server (CPU)",
+      "type": "shell",
+      "command": "bash -c 'source ~/.bashrc && conda activate openchat && python src/planner/ai/llm_server.py'",
+      "options": {
+        "cwd": "auto-planner-backend"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "Run All",
+      "dependsOn": ["NestJS Server", "LLM Server (CPU)"],
+      "dependsOrder": "parallel"
+    }
+  ]
+}

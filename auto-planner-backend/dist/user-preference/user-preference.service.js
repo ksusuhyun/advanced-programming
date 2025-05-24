@@ -48,10 +48,18 @@ let UserPreferenceService = class UserPreferenceService {
             where: { userId },
             include: { preference: true },
         });
-        if (!user) {
-            throw new common_1.NotFoundException(`User ID ${userId} not found`);
+        if (!user || !user.preference) {
+            throw new common_1.NotFoundException(`User ID ${userId} preference not found`);
         }
-        return user.preference;
+        return {
+            style: user.preference.style,
+            studyDays: user.preference.studyDays,
+            sessionsPerDay: user.preference.sessionsPerDay,
+        };
+    }
+    async getStyle(userId) {
+        const pref = await this.findByUserId(userId);
+        return pref.style;
     }
 };
 exports.UserPreferenceService = UserPreferenceService;

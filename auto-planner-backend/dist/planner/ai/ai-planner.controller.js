@@ -16,7 +16,6 @@ exports.AiPlannerController = void 0;
 const common_1 = require("@nestjs/common");
 const ai_planner_service_1 = require("./ai-planner.service");
 const ai_planner_dto_1 = require("./dto/ai-planner.dto");
-const sync_to_notion_dto_1 = require("../../notion/dto/sync-to-notion.dto");
 const swagger_1 = require("@nestjs/swagger");
 let AiPlannerController = class AiPlannerController {
     aiPlannerService;
@@ -44,7 +43,24 @@ __decorate([
             },
         },
     }),
-    (0, swagger_1.ApiOkResponse)({ type: [sync_to_notion_dto_1.SyncToNotionDto] }),
+    (0, swagger_1.ApiOkResponse)({
+        description: '생성된 학습 계획 목록',
+        schema: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    subject: { type: 'string', example: '수학' },
+                    startDate: { type: 'string', example: '2025-06-01' },
+                    endDate: { type: 'string', example: '2025-06-15' },
+                    dailyPlan: {
+                        type: 'array',
+                        items: { type: 'string', example: '6/1: 수열의 개념' },
+                    },
+                },
+            },
+        },
+    }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [ai_planner_dto_1.AiGeneratePlanDto]),

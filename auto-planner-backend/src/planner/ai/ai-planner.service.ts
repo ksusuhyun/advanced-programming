@@ -2,10 +2,10 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UserPreferenceService } from '../../user-preference/user-preference.service';
 import { ExamService } from '../../exam/exam.service';
-import { LLMClientService } from './llm-client.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
 import { NotionService } from '../../notion/notion.service';
-import { generateAIBasedPlan } from './utils/ai-mapper';
+import { LlmClientService } from '../server/llm-client.service';
+import { eachDayOfInterval, format, parseISO } from 'date-fns';
 
 interface Chapter {
   chapterTitle: string;
@@ -26,75 +26,81 @@ interface ChapterSlice {
   pageRange: string;
 }
 
-const PAGE_LIMIT_BY_DIFFICULTY: Record<string, number> = {
-  '상': 5,
-  '중': 10,
-  '하': 15,
-};
-
 @Injectable()
 export class AiPlannerService {
   constructor(
     private readonly configService: ConfigService,
     private readonly userPreferenceService: UserPreferenceService,
     private readonly examService: ExamService,
-    private readonly llmClient: LLMClientService,
     private readonly notionService: NotionService,
+    private readonly llmClient: LlmClientService,
   ) {}
 
   async generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]> {
     const preference = await this.userPreferenceService.findByUserId(userId);
+    const style = await this.userPreferenceService.getStyle(userId);
     const { exams } = await this.examService.findByUser(userId);
-
     if (!preference || !exams || exams.length === 0) {
       throw new InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
     }
 
-    const mergedSubjects = this.mergeSubjects(exams);
-    const slices = this.flattenChapters(mergedSubjects);
-    const prompt = this.createPromptFromSlices(slices, preference);
-
-    const raw = await this.llmClient.generate(prompt);
-
     const databaseId = this.configService.get<string>('DATABASE_ID');
     if (!databaseId) throw new InternalServerErrorException('❌ DATABASE_ID 누락');
 
-    return this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, raw);
+    const mergedSubjects = this.mergeSubjects(exams);
+    const slices = this.flattenChapters(mergedSubjects);
+    const dates = this.getAllStudyDates(mergedSubjects, preference.studyDays);
+
+    const prompt = this.createPromptWithConstraints(slices, dates, preference, style);
+    const llmResult = await this.llmClient.generate(prompt);
+    if (!Array.isArray(llmResult)) throw new Error('❌ LLM 응답 오류');
+
+    const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, llmResult);
+    for (const result of results) await this.notionService.syncToNotion(result);
+
+    return this.mapResponseForClient(results);
+  }
+
+  private mapResponseForClient(results: SyncToNotionDto[]): any[] {
+    return results.map(({ subject, startDate, endDate, dailyPlan }) => ({
+      subject,
+      startDate,
+      endDate,
+      dailyPlan,
+    }));
   }
 
   private groupDailyPlansBySubject(
     userId: string,
     databaseId: string,
     subjects: Subject[],
-    llmResponse: any[]
+    llmResponse: any[],
   ): SyncToNotionDto[] {
-    const grouped: Record<string, string[]> = {};
+    const groupedBySubject: Record<string, SyncToNotionDto> = {};
 
     for (const item of llmResponse) {
-      if (!grouped[item.subject]) {
-        grouped[item.subject] = [];
+      const subjectKey = item.subject;
+      if (!groupedBySubject[subjectKey]) {
+        const matched = subjects.find(s => s.subject === subjectKey);
+        if (!matched) throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
+        groupedBySubject[subjectKey] = {
+          userId,
+          subject: subjectKey,
+          startDate: matched.startDate,
+          endDate: matched.endDate,
+          dailyPlan: [],
+          databaseId,
+        };
       }
-      grouped[item.subject].push(`${item.date}: ${item.content}`);
+      groupedBySubject[subjectKey].dailyPlan.push(`${item.date}: ${item.content}`);
     }
+    
 
-    return Object.entries(grouped).map(([subject, dailyPlan]) => {
-      const matchedSubject = subjects.find((s) => s.subject === subject);
-      if (!matchedSubject) throw new Error(`❌ 과목 일치 실패: ${subject}`);
-
-      return {
-        userId,
-        subject,
-        startDate: matchedSubject.startDate,
-        endDate: matchedSubject.endDate,
-        dailyPlan,
-        databaseId,
-      };
-    });
+    return Object.values(groupedBySubject);
   }
 
   private mergeSubjects(exams: any[]): Subject[] {
     const grouped: Record<string, any> = {};
-
     for (const exam of exams) {
       const key = exam.subject;
       if (!grouped[key]) {
@@ -114,26 +120,24 @@ export class AiPlannerService {
         grouped[key].chapters.push(...exam.chapters);
       }
     }
-
     return Object.values(grouped);
   }
 
   private sliceChapter(chapter: Chapter): ChapterSlice[] {
-    const { chapterTitle, contentVolume, difficulty } = chapter;
-    const limit = PAGE_LIMIT_BY_DIFFICULTY[difficulty] ?? 10;
+    const { chapterTitle, contentVolume } = chapter;
+    const pagesPerSlice = 10;
     const slices: ChapterSlice[] = [];
 
     let pageStart = 1;
     while (pageStart <= contentVolume) {
-      const pageEnd = Math.min(pageStart + limit - 1, contentVolume);
+      const pageEnd = Math.min(pageStart + pagesPerSlice - 1, contentVolume);
       slices.push({
         title: chapterTitle,
         pageRange: `(p.${pageStart}-${pageEnd})`,
-        subject: '', // subject는 나중에 추가됨
+        subject: '',
       });
       pageStart = pageEnd + 1;
     }
-
     return slices;
   }
 
@@ -148,19 +152,51 @@ export class AiPlannerService {
     return slices;
   }
 
-  private createPromptFromSlices(slices: ChapterSlice[], pref: any): string {
-    const lines = [
-      '# You are a planner assistant.',
-      '# Given the list of chapter slices, assign them to study days within the allowed period.',
-      `# Each day can contain up to ${pref.sessionsPerDay} items.`,
-      `# Use only the allowed weekdays: ${pref.studyDays.join(', ')}`,
-      '# Output only JSON array like:',
-      '# [{ "subject": "...", "date": "6/1", "content": "챕터명 (p.1-5)" }, ...]',
-      '',
-      'Slices:'
-    ];
+  private getAllStudyDates(subjects: Subject[], studyDays: string[]): string[] {
+    const dayMap: Record<string, number> = {
+      Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+      Thursday: 4, Friday: 5, Saturday: 6,
+    };
+    const allowed = studyDays.map(d => dayMap[d]);
+    const allDates: Set<string> = new Set();
 
-    lines.push(...slices.map((s, i) => `${i + 1}. ${s.subject} - ${s.title} ${s.pageRange}`));
+    for (const subj of subjects) {
+      const interval = eachDayOfInterval({
+        start: parseISO(subj.startDate),
+        end: parseISO(subj.endDate),
+      });
+      for (const d of interval) {
+        if (allowed.includes(d.getDay())) {
+          allDates.add(format(d, 'M/d'));
+        }
+      }
+    }
+    return Array.from(allDates).sort();
+  }
+
+  private createPromptWithConstraints(
+    slices: ChapterSlice[],
+    allowedDates: string[],
+    pref: any,
+    style: 'focus' | 'multi',
+  ): string {
+    const lines: string[] = [];
+
+    lines.push(`너는 AI 학습 계획 생성기야.`);
+    lines.push(`다음 챕터 목록을 가능한 날짜에 맞춰 적절히 분배해.`);
+    lines.push(`조건은 다음과 같아:`);
+    lines.push(`- 하루 최대 ${pref.sessionsPerDay || 2}개의 챕터까지만 배정 가능`);
+    lines.push(`- 가능한 날짜: ${allowedDates.join(', ')}`);
+    if (style === 'focus') {
+      lines.push(`- 하루에는 반드시 하나의 과목만 포함되도록 구성해줘`);
+    }
+    lines.push(`- 출력은 반드시 JSON 배열 형식, 항목은 subject, date, content만 포함해야 해`);
+    lines.push(`- 설명이나 print문, 코드블럭 포함하지 마`);
+
+    lines.push(`\n챕터 목록:`);
+    slices.forEach((s, i) => {
+      lines.push(`${i + 1}. ${s.subject} - ${s.title} ${s.pageRange}`);
+    });
 
     return lines.join('\n');
   }

@@ -5,7 +5,8 @@ import { AiPlannerController } from './ai-planner.controller';
 import { UserPreferenceModule } from '../../user-preference/user-preference.module'; // ✅ 사용자 선호도 모듈 추가
 import { ExamModule } from '../../exam/exam.module'; // ✅ 시험 정보 모듈 추가
 import { NotionModule } from '../../notion/notion.module'; // ✅ Notion 연동 모듈 추가
-import { LLMClientService } from './llm-client.service';
+import { LlmClientService } from '../server/llm-client.service';
+
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { LLMClientService } from './llm-client.service';
     NotionModule,          // ✅ Notion 연동을 위해 필요
   ],
   controllers: [AiPlannerController], // AI 요청을 처리하는 컨트롤러 등록
-  providers: [AiPlannerService, LLMClientService], // 실제 처리 로직을 담당하는 서비스 등록
+  providers: [AiPlannerService, LlmClientService], // 실제 처리 로직을 담당하는 서비스 등록
+  exports: [AiPlannerService]
 })
 export class AiModule {}
 // AiModule : ai 관련 기능만 담당하는 모듈로, HttpModule 포함

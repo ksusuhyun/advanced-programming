@@ -14,7 +14,7 @@ const ai_planner_controller_1 = require("./ai-planner.controller");
 const user_preference_module_1 = require("../../user-preference/user-preference.module");
 const exam_module_1 = require("../../exam/exam.module");
 const notion_module_1 = require("../../notion/notion.module");
-const llm_client_service_1 = require("./llm-client.service");
+const llm_client_service_1 = require("../server/llm-client.service");
 let AiModule = class AiModule {
 };
 exports.AiModule = AiModule;
@@ -28,7 +28,8 @@ exports.AiModule = AiModule = __decorate([
             notion_module_1.NotionModule,
         ],
         controllers: [ai_planner_controller_1.AiPlannerController],
-        providers: [ai_planner_service_1.AiPlannerService, llm_client_service_1.LLMClientService],
+        providers: [ai_planner_service_1.AiPlannerService, llm_client_service_1.LlmClientService],
+        exports: [ai_planner_service_1.AiPlannerService]
     })
 ], AiModule);
 //# sourceMappingURL=ai.module.js.map

@@ -17,13 +17,14 @@ import { NotionModule } from './notion/notion.module'; // ✅ 다시 주석 해�
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env', // ✅ 명시적으로 필요
     }),
     HttpModule,
     UserModule,
     AuthModule,
     UserPreferenceModule,
     ExamModule,
-    AiModule,
+    AiModule, // ✅ 반드시 포함되어야 Nest가 인스턴스를 만듦
     PlannerModule,
     NotionModule, // ✅ 반드시 포함되어야 라우터 활성화됨
   ],

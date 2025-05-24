@@ -1,20 +1,22 @@
 import { ConfigService } from '@nestjs/config';
 import { UserPreferenceService } from '../../user-preference/user-preference.service';
 import { ExamService } from '../../exam/exam.service';
-import { LLMClientService } from './llm-client.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
 import { NotionService } from '../../notion/notion.service';
+import { LlmClientService } from '../server/llm-client.service';
 export declare class AiPlannerService {
     private readonly configService;
     private readonly userPreferenceService;
     private readonly examService;
-    private readonly llmClient;
     private readonly notionService;
-    constructor(configService: ConfigService, userPreferenceService: UserPreferenceService, examService: ExamService, llmClient: LLMClientService, notionService: NotionService);
+    private readonly llmClient;
+    constructor(configService: ConfigService, userPreferenceService: UserPreferenceService, examService: ExamService, notionService: NotionService, llmClient: LlmClientService);
     generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]>;
+    private mapResponseForClient;
     private groupDailyPlansBySubject;
     private mergeSubjects;
     private sliceChapter;
     private flattenChapters;
-    private createPromptFromSlices;
+    private getAllStudyDates;
+    private createPromptWithConstraints;
 }
