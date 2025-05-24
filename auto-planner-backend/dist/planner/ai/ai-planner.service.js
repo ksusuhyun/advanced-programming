@@ -43,11 +43,24 @@ let AiPlannerService = class AiPlannerService {
         const mergedSubjects = this.mergeSubjects(exams);
         const slices = this.flattenChapters(mergedSubjects);
         const dates = this.getAllStudyDates(mergedSubjects, preference.studyDays);
-        const prompt = this.createPromptWithConstraints(slices, dates, preference, style);
-        const llmResult = await this.llmClient.generate(prompt);
-        if (!Array.isArray(llmResult))
-            throw new Error('❌ LLM 응답 오류');
-        const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, llmResult);
+        let rawPlans = [];
+        const useLLM = true;
+        if (useLLM) {
+            try {
+                const prompt = this.createPromptWithConstraints(slices, dates, preference, style);
+                rawPlans = await this.llmClient.generate(prompt);
+                if (!Array.isArray(rawPlans))
+                    throw new Error('Invalid LLM output');
+            }
+            catch (e) {
+                console.warn('⚠️ LLM 실패 - fallback 사용:', e.message);
+                rawPlans = this.assignChaptersByRule(slices, dates, preference.sessionsPerDay);
+            }
+        }
+        else {
+            rawPlans = this.assignChaptersByRule(slices, dates, preference.sessionsPerDay);
+        }
+        const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
         for (const result of results)
             await this.notionService.syncToNotion(result);
         return this.mapResponseForClient(results);
@@ -168,6 +181,23 @@ let AiPlannerService = class AiPlannerService {
             lines.push(`${i + 1}. ${s.subject} - ${s.title} ${s.pageRange}`);
         });
         return lines.join('\n');
+    }
+    assignChaptersByRule(slices, studyDates, maxPerDay) {
+        const result = [];
+        let i = 0;
+        for (const date of studyDates) {
+            for (let j = 0; j < maxPerDay && i < slices.length; j++, i++) {
+                const s = slices[i];
+                result.push({
+                    subject: s.subject,
+                    date,
+                    content: `${s.title} ${s.pageRange}`,
+                });
+            }
+            if (i >= slices.length)
+                break;
+        }
+        return result;
     }
 };
 exports.AiPlannerService = AiPlannerService;
