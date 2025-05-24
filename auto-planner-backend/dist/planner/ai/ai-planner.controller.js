@@ -29,7 +29,11 @@ let AiPlannerController = class AiPlannerController {
 exports.AiPlannerController = AiPlannerController;
 __decorate([
     (0, common_1.Post)('/generate'),
-    (0, swagger_1.ApiOperation)({ summary: 'GPT 기반 학습 계획 생성' }),
+    (0, swagger_1.ApiOperation)({
+        summary: 'GPT 기반 학습 계획 생성',
+        description: `사용자의 시험 정보 및 preference를 기반으로 LLM(FastAPI) 또는 내부 rule engine을 활용하여 학습 계획을 생성합니다.
+  LLM 호출이 실패하거나 비활성화된 경우, 내부 TypeScript 로직으로 fallback 처리됩니다.`,
+    }),
     (0, swagger_1.ApiBody)({
         schema: {
             type: 'object',
@@ -38,25 +42,27 @@ __decorate([
                 userId: {
                     type: 'string',
                     example: 'user123',
-                    description: '사용자 ID',
+                    description: '사용자 고유 ID',
                 },
             },
         },
     }),
     (0, swagger_1.ApiOkResponse)({
-        description: '생성된 학습 계획 목록',
+        description: `생성된 학습 계획 목록 (Notion에 동기화됨). 
+  응답은 JSON 배열이며, 각 항목은 { subject, date, content } 형식입니다.`,
         schema: {
             type: 'array',
             items: {
                 type: 'object',
                 properties: {
-                    subject: { type: 'string', example: '수학' },
+                    subject: { type: 'string', example: '의료기기인허가' },
                     startDate: { type: 'string', example: '2025-06-01' },
                     endDate: { type: 'string', example: '2025-06-15' },
                     dailyPlan: {
                         type: 'array',
-                        items: { type: 'string', example: '6/1: 수열의 개념' },
+                        items: { type: 'string', example: '6/1: Chapter 7 (p.1-10)' },
                     },
+                    databaseId: { type: 'string', example: 'notion-db-id-abc123' },
                 },
             },
         },
