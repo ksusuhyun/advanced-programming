@@ -1,29 +1,264 @@
+// import { Injectable, InternalServerErrorException } from '@nestjs/common';
+// import { ConfigService } from '@nestjs/config';
+// import { UserPreferenceService } from '../../user-preference/user-preference.service';
+// import { ExamService } from '../../exam/exam.service';
+// import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
+// import { NotionService } from '../../notion/notion.service';
+// import { getAllStudyDates } from './utils/date-utils';
+
+// interface Chapter {
+//   chapterTitle: string;
+//   contentVolume: number;
+//   difficulty: string; // '상', '중', '하'
+// }
+
+// interface Subject {
+//   subject: string;
+//   startDate: string;
+//   endDate: string;
+//   importance: number;
+//   chapters: Chapter[];
+// }
+
+// interface EstimatedChapter {
+//   subject: string;
+//   title: string;
+//   contentVolume: number;
+//   estimatedDays: number;
+// }
+
+// @Injectable()
+// export class AiPlannerService {
+//   constructor(
+//     private readonly configService: ConfigService,
+//     private readonly userPreferenceService: UserPreferenceService,
+//     private readonly examService: ExamService,
+//     private readonly notionService: NotionService,
+//   ) {}
+
+//   async generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]> {
+//     const preference = await this.userPreferenceService.findByUserId(userId);
+//     const style = await this.userPreferenceService.getStyle(userId);
+//     const { exams } = await this.examService.findByUser(userId);
+
+//     if (!preference || !exams || exams.length === 0) {
+//       throw new InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
+//     }
+
+//     const databaseId = this.configService.get<string>('DATABASE_ID');
+//     if (!databaseId) throw new InternalServerErrorException('❌ DATABASE_ID 누락');
+
+//     const mergedSubjects = this.mergeSubjects(exams);
+//     const estimates = this.estimateDaysByDifficulty(mergedSubjects);
+//     const studyDates = getAllStudyDates(mergedSubjects, preference.studyDays);
+
+//     const rawPlans = this.assignChaptersFallback(estimates, studyDates, preference.sessionsPerDay);
+//     const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
+
+//     for (const result of results) {
+//       await this.notionService.syncToNotion(result);
+//     }
+
+//     return this.mapResponseForClient(results);
+//   }
+
+//   private estimateDaysByDifficulty(subjects: Subject[]): EstimatedChapter[] {
+//     const diffWeight = { 상: 1.5, 중: 1.0, 하: 0.7 };
+//     const result: EstimatedChapter[] = [];
+
+//     for (const subject of subjects) {
+//       for (const chapter of subject.chapters) {
+//         const factor = diffWeight[chapter.difficulty] || 1.0;
+//         const days = Math.ceil((chapter.contentVolume * factor) / 10);
+//         result.push({
+//           subject: subject.subject,
+//           title: chapter.chapterTitle,
+//           contentVolume: chapter.contentVolume,
+//           estimatedDays: days,
+//         });
+//       }
+//     }
+//     return result;
+//   }
+
+//   private assignChaptersFallback(
+//     chapters: EstimatedChapter[],
+//     dates: string[],
+//     maxPerDay: number
+//   ): { subject: string; date: string; content: string }[] {
+//     const result: any[] = [];
+//     let dateIndex = 0;
+//     let sessionInDay = 0;
+
+//     for (const chapter of chapters) {
+//       const totalPages = chapter.contentVolume;
+//       const estimatedDays = Math.max(chapter.estimatedDays, 1);
+//       const pagesPerDay = Math.ceil(totalPages / estimatedDays);
+
+//       let pageStart = 1;
+//       let remainingPages = totalPages;
+
+//       while (remainingPages > 0) {
+//         const pageEnd = Math.min(pageStart + pagesPerDay - 1, totalPages);
+//         const date = dates[dateIndex];
+
+//         result.push({
+//           subject: chapter.subject,
+//           date,
+//           content: `${chapter.title} (p.${pageStart}-${pageEnd})`,
+//         });
+
+//         const pagesThisSession = pageEnd - pageStart + 1;
+//         remainingPages -= pagesThisSession;
+//         pageStart = pageEnd + 1;
+//         sessionInDay++;
+
+//         if (sessionInDay >= maxPerDay) {
+//           sessionInDay = 0;
+//           dateIndex++;
+//         }
+
+//         if (dateIndex >= dates.length) {
+//           console.warn("⚠️ 날짜가 부족하여 계획이 조기에 종료될 수 있습니다.");
+//           return result;
+//         }
+//       }
+//     }
+
+//     return result;
+//   }
+
+
+//   private mapResponseForClient(results: SyncToNotionDto[]): any[] {
+//     return results.map(({ subject, startDate, endDate, dailyPlan }) => ({
+//       subject,
+//       startDate,
+//       endDate,
+//       dailyPlan,
+//     }));
+//   }
+
+//   private groupDailyPlansBySubject(
+//     userId: string,
+//     databaseId: string,
+//     subjects: Subject[],
+//     llmResponse: { subject: string; date: string; content: string }[]
+//   ): SyncToNotionDto[] {
+//     const groupedBySubject: Record<string, SyncToNotionDto> = {};
+
+//     // 🔧 병합용 임시 구조
+//     const planMap: Record<string, { [date: string]: { title: string; pageStart: number; pageEnd: number } }> = {};
+
+//     for (const item of llmResponse) {
+//       const subjectKey = item.subject;
+//       if (!groupedBySubject[subjectKey]) {
+//         const matched = subjects.find(s => s.subject === subjectKey);
+//         if (!matched) throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
+//         groupedBySubject[subjectKey] = {
+//           userId,
+//           subject: subjectKey,
+//           startDate: matched.startDate.toString(),
+//           endDate: matched.endDate.toString(),
+//           dailyPlan: [],
+//           databaseId,
+//         };
+//         planMap[subjectKey] = {};
+//       }
+
+//       const match = item.content.match(/(.+?) \(p\.(\d+)-(\d+)\)/);
+//       if (!match) {
+//         // 형식이 안 맞는 경우 그대로 추가
+//         groupedBySubject[subjectKey].dailyPlan.push(`${item.date}: ${item.content}`);
+//         continue;
+//       }
+
+//       const [_, title, pStartStr, pEndStr] = match;
+//       const pStart = parseInt(pStartStr);
+//       const pEnd = parseInt(pEndStr);
+//       const dateKey = `${item.date}-${title}`;
+
+//       const subjectMap = planMap[subjectKey];
+//       if (!subjectMap[dateKey]) {
+//         subjectMap[dateKey] = { title, pageStart: pStart, pageEnd: pEnd };
+//       } else {
+//         subjectMap[dateKey].pageStart = Math.min(subjectMap[dateKey].pageStart, pStart);
+//         subjectMap[dateKey].pageEnd = Math.max(subjectMap[dateKey].pageEnd, pEnd);
+//       }
+//     }
+
+//     // 병합된 결과를 다시 dailyPlan에 넣기
+//     for (const subjectKey of Object.keys(groupedBySubject)) {
+//       const dto = groupedBySubject[subjectKey];
+//       const map = planMap[subjectKey];
+
+//       const sortedKeys = Object.keys(map).sort(); // 날짜 순 정렬
+
+//       for (const key of sortedKeys) {
+//         const [date, _title] = key.split(/-(.+)/); // split on first '-'
+//         const { title, pageStart, pageEnd } = map[key];
+//         dto.dailyPlan.push(`${date}: ${title} (p.${pageStart}-${pageEnd})`);
+//       }
+//     }
+
+//     return Object.values(groupedBySubject);
+//   }
+
+
+//   private mergeSubjects(exams: any[]): Subject[] {
+//     const grouped: Record<string, any> = {};
+//     for (const exam of exams) {
+//       const key = exam.subject;
+//       if (!grouped[key]) {
+//         grouped[key] = {
+//           subject: exam.subject,
+//           startDate: exam.startDate,
+//           endDate: exam.endDate,
+//           importance: exam.importance,
+//           chapters: [...exam.chapters],
+//         };
+//       } else {
+//         grouped[key].startDate = new Date(exam.startDate) < new Date(grouped[key].startDate)
+//           ? exam.startDate
+//           : grouped[key].startDate;
+//         grouped[key].endDate = new Date(exam.endDate) > new Date(grouped[key].endDate)
+//           ? exam.endDate
+//           : grouped[key].endDate;
+//         grouped[key].chapters.push(...exam.chapters);
+//       }
+//     }
+//     return Object.values(grouped);
+//   }
+// }
+
+
+
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UserPreferenceService } from '../../user-preference/user-preference.service';
 import { ExamService } from '../../exam/exam.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
 import { NotionService } from '../../notion/notion.service';
-import { LlmClientService } from '../server/llm-client.service';
-import { eachDayOfInterval, format, parseISO } from 'date-fns';
+import { getAllStudyDates } from './utils/date-utils';
 
 interface Chapter {
   chapterTitle: string;
   contentVolume: number;
-  difficulty: string;
+  difficulty: string; // '상', '중', '하'
 }
 
 interface Subject {
   subject: string;
   startDate: string;
   endDate: string;
+  importance: number;
   chapters: Chapter[];
 }
 
-interface ChapterSlice {
+interface EstimatedChapter {
   subject: string;
   title: string;
-  pageRange: string;
+  contentVolume: number;
+  estimatedDays: number;
 }
 
 @Injectable()
@@ -33,13 +268,13 @@ export class AiPlannerService {
     private readonly userPreferenceService: UserPreferenceService,
     private readonly examService: ExamService,
     private readonly notionService: NotionService,
-    private readonly llmClient: LlmClientService,
   ) {}
 
   async generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]> {
     const preference = await this.userPreferenceService.findByUserId(userId);
     const style = await this.userPreferenceService.getStyle(userId);
     const { exams } = await this.examService.findByUser(userId);
+
     if (!preference || !exams || exams.length === 0) {
       throw new InternalServerErrorException('❌ 유저 정보 또는 시험 데이터가 부족합니다.');
     }
@@ -48,66 +283,113 @@ export class AiPlannerService {
     if (!databaseId) throw new InternalServerErrorException('❌ DATABASE_ID 누락');
 
     const mergedSubjects = this.mergeSubjects(exams);
-    const slices = this.flattenChapters(mergedSubjects);
-    const dates = this.getAllStudyDates(mergedSubjects, preference.studyDays);
+    const estimates = this.estimateDaysByDifficulty(mergedSubjects);
+    const studyDates = getAllStudyDates(mergedSubjects, preference.studyDays);
 
-    let rawPlans: any[] = [];
-    const useLLM = true;
-
-    if (useLLM) {
-      try {
-        const prompt = this.createPromptWithConstraints(slices, dates, preference, style);
-        rawPlans = await this.llmClient.generate(prompt);
-        if (!Array.isArray(rawPlans)) throw new Error('Invalid LLM output');
-      } catch (e) {
-        console.warn('⚠️ LLM 실패 - fallback 사용:', (e as Error).message);
-        rawPlans = this.assignChaptersByRule(slices, dates, preference.sessionsPerDay);
-      }
-    } else {
-      rawPlans = this.assignChaptersByRule(slices, dates, preference.sessionsPerDay);
-    }
+    const rawPlans = this.assignChaptersFallback(estimates, studyDates, preference.sessionsPerDay, style);
 
     const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
-    for (const result of results) await this.notionService.syncToNotion(result);
-
-    return this.mapResponseForClient(results);
-  }
-
-  private mapResponseForClient(results: SyncToNotionDto[]): any[] {
-    return results.map(({ subject, startDate, endDate, dailyPlan }) => ({
-      subject,
-      startDate,
-      endDate,
-      dailyPlan,
-    }));
-  }
-
-  private groupDailyPlansBySubject(
-    userId: string,
-    databaseId: string,
-    subjects: Subject[],
-    llmResponse: any[],
-  ): SyncToNotionDto[] {
-    const groupedBySubject: Record<string, SyncToNotionDto> = {};
-
-    for (const item of llmResponse) {
-      const subjectKey = item.subject;
-      if (!groupedBySubject[subjectKey]) {
-        const matched = subjects.find(s => s.subject === subjectKey);
-        if (!matched) throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
-        groupedBySubject[subjectKey] = {
-          userId,
-          subject: subjectKey,
-          startDate: matched.startDate,
-          endDate: matched.endDate,
-          dailyPlan: [],
-          databaseId,
-        };
-      }
-      groupedBySubject[subjectKey].dailyPlan.push(`${item.date}: ${item.content}`);
+    for (const result of results) {
+      await this.notionService.syncToNotion(result);
     }
 
-    return Object.values(groupedBySubject);
+    return results;
+  }
+
+  private estimateDaysByDifficulty(subjects: Subject[]): EstimatedChapter[] {
+    const diffWeight = { '상': 1.5, '중': 1.0, '하': 0.7 };
+    const result: EstimatedChapter[] = [];
+
+    for (const subject of subjects) {
+      for (const chapter of subject.chapters) {
+        const factor = diffWeight[chapter.difficulty] || 1.0;
+        const days = Math.ceil((chapter.contentVolume * factor) / 10);  // 10p/day 기준
+        result.push({
+          subject: subject.subject,
+          title: chapter.chapterTitle,
+          contentVolume: chapter.contentVolume,
+          estimatedDays: days,
+        });
+      }
+    }
+    return result;
+  }
+
+  private assignChaptersFallback(
+    chapters: EstimatedChapter[],
+    dates: string[],
+    maxPerDay: number,
+    style: 'focus' | 'multi'
+  ): { subject: string; date: string; content: string }[] {
+    const result: any[] = [];
+    let dateIndex = 0;
+    let sessionInDay = 0;
+
+    if (style === 'focus') {
+      const grouped = chapters.reduce((acc, c) => {
+        if (!acc[c.subject]) acc[c.subject] = [];
+        acc[c.subject].push(c);
+        return acc;
+      }, {} as Record<string, EstimatedChapter[]>);
+
+      for (const subject of Object.keys(grouped)) {
+        const subjectChapters = grouped[subject];
+        for (const chapter of subjectChapters) {
+          let remaining = chapter.contentVolume;
+          const pagesPerDay = Math.ceil(chapter.contentVolume / chapter.estimatedDays);
+          let pageStart = 1;
+
+          while (remaining > 0 && dateIndex < dates.length) {
+            const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
+
+            result.push({
+              subject: chapter.subject,
+              date: dates[dateIndex],
+              content: `${chapter.title} (p.${pageStart}-${pageEnd})`,
+            });
+
+            const pagesThisSession = pageEnd - pageStart + 1;
+            remaining -= pagesThisSession;
+            pageStart = pageEnd + 1;
+            dateIndex++; // 하루에 한 세션만, 한 과목만
+          }
+        }
+      }
+    } else {
+      // multi 스타일
+      for (const chapter of chapters) {
+        let remaining = chapter.contentVolume;
+        const pagesPerDay = Math.ceil(chapter.contentVolume / chapter.estimatedDays);
+        let pageStart = 1;
+
+        while (remaining > 0) {
+          const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
+          const date = dates[dateIndex];
+
+          result.push({
+            subject: chapter.subject,
+            date,
+            content: `${chapter.title} (p.${pageStart}-${pageEnd})`,
+          });
+
+          const pagesThisSession = pageEnd - pageStart + 1;
+          remaining -= pagesThisSession;
+          pageStart = pageEnd + 1;
+          sessionInDay++;
+
+          if (sessionInDay >= maxPerDay) {
+            dateIndex++;
+            sessionInDay = 0;
+          }
+
+          if (dateIndex >= dates.length) {
+            console.warn('⚠️ 날짜 부족');
+            return result;
+          }
+        }
+      }
+    }
+    return result;
   }
 
   private mergeSubjects(exams: any[]): Subject[] {
@@ -119,6 +401,7 @@ export class AiPlannerService {
           subject: exam.subject,
           startDate: exam.startDate,
           endDate: exam.endDate,
+          importance: exam.importance,
           chapters: [...exam.chapters],
         };
       } else {
@@ -134,104 +417,31 @@ export class AiPlannerService {
     return Object.values(grouped);
   }
 
-  private sliceChapter(chapter: Chapter): ChapterSlice[] {
-    const { chapterTitle, contentVolume } = chapter;
-    const pagesPerSlice = 10;
-    const slices: ChapterSlice[] = [];
+  private groupDailyPlansBySubject(
+    userId: string,
+    databaseId: string,
+    subjects: Subject[],
+    rawPlans: { subject: string; date: string; content: string }[],
+  ): SyncToNotionDto[] {
+    const groupedBySubject: Record<string, SyncToNotionDto> = {};
 
-    let pageStart = 1;
-    while (pageStart <= contentVolume) {
-      const pageEnd = Math.min(pageStart + pagesPerSlice - 1, contentVolume);
-      slices.push({
-        title: chapterTitle,
-        pageRange: `(p.${pageStart}-${pageEnd})`,
-        subject: '',
-      });
-      pageStart = pageEnd + 1;
-    }
-    return slices;
-  }
-
-  private flattenChapters(subjects: Subject[]): ChapterSlice[] {
-    const slices: ChapterSlice[] = [];
-    for (const subject of subjects) {
-      for (const chapter of subject.chapters) {
-        const chapterSlices = this.sliceChapter(chapter);
-        slices.push(...chapterSlices.map(slice => ({ ...slice, subject: subject.subject })));
+    for (const item of rawPlans) {
+      const subjectKey = item.subject;
+      if (!groupedBySubject[subjectKey]) {
+        const matched = subjects.find(s => s.subject === subjectKey);
+        if (!matched) throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
+        groupedBySubject[subjectKey] = {
+          userId,
+          subject: subjectKey,
+          startDate: matched.startDate.toString(),
+          endDate: matched.endDate.toString(),
+          dailyPlan: [],
+          databaseId,
+        };
       }
-    }
-    return slices;
-  }
-
-  private getAllStudyDates(subjects: Subject[], studyDays: string[]): string[] {
-    const dayMap: Record<string, number> = {
-      Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-      Thursday: 4, Friday: 5, Saturday: 6,
-    };
-    const allowed = studyDays.map(d => dayMap[d]);
-    const allDates: Set<string> = new Set();
-
-    for (const subj of subjects) {
-      const interval = eachDayOfInterval({
-        start: parseISO(subj.startDate),
-        end: parseISO(subj.endDate),
-      });
-      for (const d of interval) {
-        if (allowed.includes(d.getDay())) {
-          allDates.add(format(d, 'M/d'));
-        }
-      }
-    }
-    return Array.from(allDates).sort();
-  }
-
-  private createPromptWithConstraints(
-    slices: ChapterSlice[],
-    allowedDates: string[],
-    pref: any,
-    style: 'focus' | 'multi',
-  ): string {
-    const lines: string[] = [];
-
-    lines.push(`너는 AI 학습 계획 생성기야.`);
-    lines.push(`다음 챕터 목록을 가능한 날짜에 맞춰 적절히 분배해.`);
-    lines.push(`조건은 다음과 같아:`);
-    lines.push(`- 하루 최대 ${pref.sessionsPerDay || 2}개의 챕터까지만 배정 가능`);
-    lines.push(`- 가능한 날짜: ${allowedDates.join(', ')}`);
-    if (style === 'focus') {
-      lines.push(`- 하루에는 반드시 하나의 과목만 포함되도록 구성해줘`);
-    }
-    lines.push(`- 출력은 반드시 JSON 배열 형식, 항목은 subject, date, content만 포함해야 해`);
-    lines.push(`- 설명이나 print문, 코드블럭 포함하지 마`);
-
-    lines.push(`\n챕터 목록:`);
-    slices.forEach((s, i) => {
-      lines.push(`${i + 1}. ${s.subject} - ${s.title} ${s.pageRange}`);
-    });
-
-    return lines.join('\n');
-  }
-
-  private assignChaptersByRule(
-    slices: ChapterSlice[],
-    studyDates: string[],
-    maxPerDay: number
-  ): { subject: string; date: string; content: string }[] {
-    const result: { subject: string; date: string; content: string }[] = [];
-    let i = 0;
-
-    for (const date of studyDates) {
-      for (let j = 0; j < maxPerDay && i < slices.length; j++, i++) {
-        const s = slices[i];
-        result.push({
-          subject: s.subject,
-          date,
-          content: `${s.title} ${s.pageRange}`,
-        });
-      }
-      if (i >= slices.length) break;
+      groupedBySubject[subjectKey].dailyPlan.push(`${item.date}: ${item.content}`);
     }
 
-    return result;
+    return Object.values(groupedBySubject);
   }
 }

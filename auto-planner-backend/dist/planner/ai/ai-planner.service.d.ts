@@ -3,21 +3,15 @@ import { UserPreferenceService } from '../../user-preference/user-preference.ser
 import { ExamService } from '../../exam/exam.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
 import { NotionService } from '../../notion/notion.service';
-import { LlmClientService } from '../server/llm-client.service';
 export declare class AiPlannerService {
     private readonly configService;
     private readonly userPreferenceService;
     private readonly examService;
     private readonly notionService;
-    private readonly llmClient;
-    constructor(configService: ConfigService, userPreferenceService: UserPreferenceService, examService: ExamService, notionService: NotionService, llmClient: LlmClientService);
+    constructor(configService: ConfigService, userPreferenceService: UserPreferenceService, examService: ExamService, notionService: NotionService);
     generateStudyPlanByUserId(userId: string): Promise<SyncToNotionDto[]>;
-    private mapResponseForClient;
-    private groupDailyPlansBySubject;
+    private estimateDaysByDifficulty;
+    private assignChaptersFallback;
     private mergeSubjects;
-    private sliceChapter;
-    private flattenChapters;
-    private getAllStudyDates;
-    private createPromptWithConstraints;
-    private assignChaptersByRule;
+    private groupDailyPlansBySubject;
 }

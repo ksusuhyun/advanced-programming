@@ -188,15 +188,19 @@
 // // }
 
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from '@notionhq/client';
 import { parse, format } from 'date-fns';
 import { getToken } from 'src/auth/notion-token.store';
 import { SyncToNotionDto } from './dto/sync-to-notion.dto';
 
+
+
 @Injectable()
 export class NotionService {
+  private readonly logger = new Logger(NotionService.name);
+
   constructor(private readonly configService: ConfigService) {}
 
   /**
@@ -204,13 +208,27 @@ export class NotionService {
    */
   private getClientForUser(userId: string): Client {
     const token = getToken(userId);
+    // ✅ DEBUG 로그 (출력 안 되는 경우, getToken 자체 확인 필요)
+    console.log('🔐 실제 사용될 토큰:', token);
+    this.logger.log(`🔑 Loaded token for user ${userId}: ${token}`);
+
     if (!token) {
       throw new Error(`❌ Notion token not found for user: ${userId}`);
     }
     return new Client({ auth: token });
   }
+    /**
+     * Notion DB 초기화: 기존 페이지 soft delete (archive)
+     */
+    // async clearDatabase(userId: string, databaseId: string) {
+    //   const notion = this.getClientForUser(userId);
+    //   const pages = await notion.databases.query({ database_id: databaseId });
 
-  /**
+    //   for (const page of pages.results) {
+    //     await notion.pages.update({ page_id: page.id, archived: true });
+    //   }
+    // }
+    /**
    * 계획 하나를 Notion에 추가
    */
   async addPlanEntry(data: {
@@ -220,13 +238,13 @@ export class NotionService {
     content: string;
     databaseId: string;
   }) {
-    // const notion = this.getClientForUser(data.userId);
-    const userToken = getToken(data.userId);
-    if (!userToken) {
-      throw new Error(`[❌ Notion 토큰 없음] userId: ${data.userId}`);
-    }
+    const notion = this.getClientForUser(data.userId);
+    // const userToken = getToken(data.userId);
+    // if (!userToken) {
+    //   throw new Error(`[❌ Notion 토큰 없음] userId: ${data.userId}`);
+    // }
 
-    const notion = new Client({ auth: userToken });
+    // const notion = new Client({ auth: userToken });
 
 
     return await notion.pages.create({
@@ -249,25 +267,60 @@ export class NotionService {
    * 전체 일정을 Notion에 동기화
    */
   async syncToNotion(dto: SyncToNotionDto) {
-    for (const entry of dto.dailyPlan) {
-      const [date, content] = entry.split(':').map((v) => v.trim());
+    // await this.clearDatabase(dto.userId, dto.databaseId);
+    // 날짜+과목 기준으로 챕터 묶기
+    const grouped = new Map<string, { date: string; contentList: string[] }>();
 
-      // 예: '6/1' => '2025-06-01'
-      const parsed = parse(date, 'M/d', new Date(dto.startDate));
+    for (const entry of dto.dailyPlan) {
+      const [dateRaw, content] = entry.split(':').map(v => v.trim());
+      const parsed = parse(dateRaw, 'M/d', new Date(dto.startDate));
       const formattedDate = format(parsed, 'yyyy-MM-dd');
 
+      const key = `${dto.subject}_${formattedDate}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, { date: formattedDate, contentList: [] });
+      }
+      grouped.get(key)!.contentList.push(content);
+    }
+
+    // 각 그룹에 대해 Notion entry 생성
+    for (const { date, contentList } of grouped.values()) {
       await this.addPlanEntry({
         userId: dto.userId,
         subject: dto.subject,
-        date: formattedDate,
-        content: content,
+        date,
+        content: contentList.join(', '), // 하나의 셀에 ,로 이어붙임
         databaseId: dto.databaseId,
       });
     }
 
     return {
       message: '📌 Notion 연동 완료',
-      count: dto.dailyPlan.length,
+      count: grouped.size, // 실제로 작성된 row 개수
     };
   }
+
+  async saveFeedbackToNotion(userId: string, title: string, content: string) {
+    const notion = this.getClientForUser(userId);
+    const databaseId = this.configService.get<string>('DATABASE_ID');
+    if (!databaseId) throw new Error('❌ DATABASE_ID 누락');
+
+    await notion.pages.create({
+      parent: { database_id: databaseId },
+      properties: {
+        Subject: {
+          title: [{ text: { content: title } }],
+        },
+        Date: {
+          date: { start: new Date().toISOString().split('T')[0] },
+        },
+        Content: {
+          rich_text: [{ text: { content } }],
+        },
+      },
+    });
+  }
 }
+
+
+

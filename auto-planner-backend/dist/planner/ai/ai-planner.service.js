@@ -15,20 +15,17 @@ const config_1 = require("@nestjs/config");
 const user_preference_service_1 = require("../../user-preference/user-preference.service");
 const exam_service_1 = require("../../exam/exam.service");
 const notion_service_1 = require("../../notion/notion.service");
-const llm_client_service_1 = require("../server/llm-client.service");
-const date_fns_1 = require("date-fns");
+const date_utils_1 = require("./utils/date-utils");
 let AiPlannerService = class AiPlannerService {
     configService;
     userPreferenceService;
     examService;
     notionService;
-    llmClient;
-    constructor(configService, userPreferenceService, examService, notionService, llmClient) {
+    constructor(configService, userPreferenceService, examService, notionService) {
         this.configService = configService;
         this.userPreferenceService = userPreferenceService;
         this.examService = examService;
         this.notionService = notionService;
-        this.llmClient = llmClient;
     }
     async generateStudyPlanByUserId(userId) {
         const preference = await this.userPreferenceService.findByUserId(userId);
@@ -41,58 +38,93 @@ let AiPlannerService = class AiPlannerService {
         if (!databaseId)
             throw new common_1.InternalServerErrorException('❌ DATABASE_ID 누락');
         const mergedSubjects = this.mergeSubjects(exams);
-        const slices = this.flattenChapters(mergedSubjects);
-        const dates = this.getAllStudyDates(mergedSubjects, preference.studyDays);
-        let rawPlans = [];
-        const useLLM = true;
-        if (useLLM) {
-            try {
-                const prompt = this.createPromptWithConstraints(slices, dates, preference, style);
-                rawPlans = await this.llmClient.generate(prompt);
-                if (!Array.isArray(rawPlans))
-                    throw new Error('Invalid LLM output');
+        const estimates = this.estimateDaysByDifficulty(mergedSubjects);
+        const studyDates = (0, date_utils_1.getAllStudyDates)(mergedSubjects, preference.studyDays);
+        const rawPlans = this.assignChaptersFallback(estimates, studyDates, preference.sessionsPerDay, style);
+        const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
+        for (const result of results) {
+            await this.notionService.syncToNotion(result);
+        }
+        return results;
+    }
+    estimateDaysByDifficulty(subjects) {
+        const diffWeight = { '상': 1.5, '중': 1.0, '하': 0.7 };
+        const result = [];
+        for (const subject of subjects) {
+            for (const chapter of subject.chapters) {
+                const factor = diffWeight[chapter.difficulty] || 1.0;
+                const days = Math.ceil((chapter.contentVolume * factor) / 10);
+                result.push({
+                    subject: subject.subject,
+                    title: chapter.chapterTitle,
+                    contentVolume: chapter.contentVolume,
+                    estimatedDays: days,
+                });
             }
-            catch (e) {
-                console.warn('⚠️ LLM 실패 - fallback 사용:', e.message);
-                rawPlans = this.assignChaptersByRule(slices, dates, preference.sessionsPerDay);
+        }
+        return result;
+    }
+    assignChaptersFallback(chapters, dates, maxPerDay, style) {
+        const result = [];
+        let dateIndex = 0;
+        let sessionInDay = 0;
+        if (style === 'focus') {
+            const grouped = chapters.reduce((acc, c) => {
+                if (!acc[c.subject])
+                    acc[c.subject] = [];
+                acc[c.subject].push(c);
+                return acc;
+            }, {});
+            for (const subject of Object.keys(grouped)) {
+                const subjectChapters = grouped[subject];
+                for (const chapter of subjectChapters) {
+                    let remaining = chapter.contentVolume;
+                    const pagesPerDay = Math.ceil(chapter.contentVolume / chapter.estimatedDays);
+                    let pageStart = 1;
+                    while (remaining > 0 && dateIndex < dates.length) {
+                        const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
+                        result.push({
+                            subject: chapter.subject,
+                            date: dates[dateIndex],
+                            content: `${chapter.title} (p.${pageStart}-${pageEnd})`,
+                        });
+                        const pagesThisSession = pageEnd - pageStart + 1;
+                        remaining -= pagesThisSession;
+                        pageStart = pageEnd + 1;
+                        dateIndex++;
+                    }
+                }
             }
         }
         else {
-            rawPlans = this.assignChaptersByRule(slices, dates, preference.sessionsPerDay);
-        }
-        const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
-        for (const result of results)
-            await this.notionService.syncToNotion(result);
-        return this.mapResponseForClient(results);
-    }
-    mapResponseForClient(results) {
-        return results.map(({ subject, startDate, endDate, dailyPlan }) => ({
-            subject,
-            startDate,
-            endDate,
-            dailyPlan,
-        }));
-    }
-    groupDailyPlansBySubject(userId, databaseId, subjects, llmResponse) {
-        const groupedBySubject = {};
-        for (const item of llmResponse) {
-            const subjectKey = item.subject;
-            if (!groupedBySubject[subjectKey]) {
-                const matched = subjects.find(s => s.subject === subjectKey);
-                if (!matched)
-                    throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
-                groupedBySubject[subjectKey] = {
-                    userId,
-                    subject: subjectKey,
-                    startDate: matched.startDate,
-                    endDate: matched.endDate,
-                    dailyPlan: [],
-                    databaseId,
-                };
+            for (const chapter of chapters) {
+                let remaining = chapter.contentVolume;
+                const pagesPerDay = Math.ceil(chapter.contentVolume / chapter.estimatedDays);
+                let pageStart = 1;
+                while (remaining > 0) {
+                    const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
+                    const date = dates[dateIndex];
+                    result.push({
+                        subject: chapter.subject,
+                        date,
+                        content: `${chapter.title} (p.${pageStart}-${pageEnd})`,
+                    });
+                    const pagesThisSession = pageEnd - pageStart + 1;
+                    remaining -= pagesThisSession;
+                    pageStart = pageEnd + 1;
+                    sessionInDay++;
+                    if (sessionInDay >= maxPerDay) {
+                        dateIndex++;
+                        sessionInDay = 0;
+                    }
+                    if (dateIndex >= dates.length) {
+                        console.warn('⚠️ 날짜 부족');
+                        return result;
+                    }
+                }
             }
-            groupedBySubject[subjectKey].dailyPlan.push(`${item.date}: ${item.content}`);
         }
-        return Object.values(groupedBySubject);
+        return result;
     }
     mergeSubjects(exams) {
         const grouped = {};
@@ -103,6 +135,7 @@ let AiPlannerService = class AiPlannerService {
                     subject: exam.subject,
                     startDate: exam.startDate,
                     endDate: exam.endDate,
+                    importance: exam.importance,
                     chapters: [...exam.chapters],
                 };
             }
@@ -118,86 +151,26 @@ let AiPlannerService = class AiPlannerService {
         }
         return Object.values(grouped);
     }
-    sliceChapter(chapter) {
-        const { chapterTitle, contentVolume } = chapter;
-        const pagesPerSlice = 10;
-        const slices = [];
-        let pageStart = 1;
-        while (pageStart <= contentVolume) {
-            const pageEnd = Math.min(pageStart + pagesPerSlice - 1, contentVolume);
-            slices.push({
-                title: chapterTitle,
-                pageRange: `(p.${pageStart}-${pageEnd})`,
-                subject: '',
-            });
-            pageStart = pageEnd + 1;
-        }
-        return slices;
-    }
-    flattenChapters(subjects) {
-        const slices = [];
-        for (const subject of subjects) {
-            for (const chapter of subject.chapters) {
-                const chapterSlices = this.sliceChapter(chapter);
-                slices.push(...chapterSlices.map(slice => ({ ...slice, subject: subject.subject })));
+    groupDailyPlansBySubject(userId, databaseId, subjects, rawPlans) {
+        const groupedBySubject = {};
+        for (const item of rawPlans) {
+            const subjectKey = item.subject;
+            if (!groupedBySubject[subjectKey]) {
+                const matched = subjects.find(s => s.subject === subjectKey);
+                if (!matched)
+                    throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
+                groupedBySubject[subjectKey] = {
+                    userId,
+                    subject: subjectKey,
+                    startDate: matched.startDate.toString(),
+                    endDate: matched.endDate.toString(),
+                    dailyPlan: [],
+                    databaseId,
+                };
             }
+            groupedBySubject[subjectKey].dailyPlan.push(`${item.date}: ${item.content}`);
         }
-        return slices;
-    }
-    getAllStudyDates(subjects, studyDays) {
-        const dayMap = {
-            Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-            Thursday: 4, Friday: 5, Saturday: 6,
-        };
-        const allowed = studyDays.map(d => dayMap[d]);
-        const allDates = new Set();
-        for (const subj of subjects) {
-            const interval = (0, date_fns_1.eachDayOfInterval)({
-                start: (0, date_fns_1.parseISO)(subj.startDate),
-                end: (0, date_fns_1.parseISO)(subj.endDate),
-            });
-            for (const d of interval) {
-                if (allowed.includes(d.getDay())) {
-                    allDates.add((0, date_fns_1.format)(d, 'M/d'));
-                }
-            }
-        }
-        return Array.from(allDates).sort();
-    }
-    createPromptWithConstraints(slices, allowedDates, pref, style) {
-        const lines = [];
-        lines.push(`너는 AI 학습 계획 생성기야.`);
-        lines.push(`다음 챕터 목록을 가능한 날짜에 맞춰 적절히 분배해.`);
-        lines.push(`조건은 다음과 같아:`);
-        lines.push(`- 하루 최대 ${pref.sessionsPerDay || 2}개의 챕터까지만 배정 가능`);
-        lines.push(`- 가능한 날짜: ${allowedDates.join(', ')}`);
-        if (style === 'focus') {
-            lines.push(`- 하루에는 반드시 하나의 과목만 포함되도록 구성해줘`);
-        }
-        lines.push(`- 출력은 반드시 JSON 배열 형식, 항목은 subject, date, content만 포함해야 해`);
-        lines.push(`- 설명이나 print문, 코드블럭 포함하지 마`);
-        lines.push(`\n챕터 목록:`);
-        slices.forEach((s, i) => {
-            lines.push(`${i + 1}. ${s.subject} - ${s.title} ${s.pageRange}`);
-        });
-        return lines.join('\n');
-    }
-    assignChaptersByRule(slices, studyDates, maxPerDay) {
-        const result = [];
-        let i = 0;
-        for (const date of studyDates) {
-            for (let j = 0; j < maxPerDay && i < slices.length; j++, i++) {
-                const s = slices[i];
-                result.push({
-                    subject: s.subject,
-                    date,
-                    content: `${s.title} ${s.pageRange}`,
-                });
-            }
-            if (i >= slices.length)
-                break;
-        }
-        return result;
+        return Object.values(groupedBySubject);
     }
 };
 exports.AiPlannerService = AiPlannerService;
@@ -206,7 +179,6 @@ exports.AiPlannerService = AiPlannerService = __decorate([
     __metadata("design:paramtypes", [config_1.ConfigService,
         user_preference_service_1.UserPreferenceService,
         exam_service_1.ExamService,
-        notion_service_1.NotionService,
-        llm_client_service_1.LlmClientService])
+        notion_service_1.NotionService])
 ], AiPlannerService);
 //# sourceMappingURL=ai-planner.service.js.map

@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var NotionService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NotionService = void 0;
 const common_1 = require("@nestjs/common");
@@ -15,24 +16,23 @@ const config_1 = require("@nestjs/config");
 const client_1 = require("@notionhq/client");
 const date_fns_1 = require("date-fns");
 const notion_token_store_1 = require("../auth/notion-token.store");
-let NotionService = class NotionService {
+let NotionService = NotionService_1 = class NotionService {
     configService;
+    logger = new common_1.Logger(NotionService_1.name);
     constructor(configService) {
         this.configService = configService;
     }
     getClientForUser(userId) {
         const token = (0, notion_token_store_1.getToken)(userId);
+        console.log('🔐 실제 사용될 토큰:', token);
+        this.logger.log(`🔑 Loaded token for user ${userId}: ${token}`);
         if (!token) {
             throw new Error(`❌ Notion token not found for user: ${userId}`);
         }
         return new client_1.Client({ auth: token });
     }
     async addPlanEntry(data) {
-        const userToken = (0, notion_token_store_1.getToken)(data.userId);
-        if (!userToken) {
-            throw new Error(`[❌ Notion 토큰 없음] userId: ${data.userId}`);
-        }
-        const notion = new client_1.Client({ auth: userToken });
+        const notion = this.getClientForUser(data.userId);
         return await notion.pages.create({
             parent: { database_id: data.databaseId },
             properties: {
@@ -49,26 +49,54 @@ let NotionService = class NotionService {
         });
     }
     async syncToNotion(dto) {
+        const grouped = new Map();
         for (const entry of dto.dailyPlan) {
-            const [date, content] = entry.split(':').map((v) => v.trim());
-            const parsed = (0, date_fns_1.parse)(date, 'M/d', new Date(dto.startDate));
+            const [dateRaw, content] = entry.split(':').map(v => v.trim());
+            const parsed = (0, date_fns_1.parse)(dateRaw, 'M/d', new Date(dto.startDate));
             const formattedDate = (0, date_fns_1.format)(parsed, 'yyyy-MM-dd');
+            const key = `${dto.subject}_${formattedDate}`;
+            if (!grouped.has(key)) {
+                grouped.set(key, { date: formattedDate, contentList: [] });
+            }
+            grouped.get(key).contentList.push(content);
+        }
+        for (const { date, contentList } of grouped.values()) {
             await this.addPlanEntry({
                 userId: dto.userId,
                 subject: dto.subject,
-                date: formattedDate,
-                content: content,
+                date,
+                content: contentList.join(', '),
                 databaseId: dto.databaseId,
             });
         }
         return {
             message: '📌 Notion 연동 완료',
-            count: dto.dailyPlan.length,
+            count: grouped.size,
         };
+    }
+    async saveFeedbackToNotion(userId, title, content) {
+        const notion = this.getClientForUser(userId);
+        const databaseId = this.configService.get('DATABASE_ID');
+        if (!databaseId)
+            throw new Error('❌ DATABASE_ID 누락');
+        await notion.pages.create({
+            parent: { database_id: databaseId },
+            properties: {
+                Subject: {
+                    title: [{ text: { content: title } }],
+                },
+                Date: {
+                    date: { start: new Date().toISOString().split('T')[0] },
+                },
+                Content: {
+                    rich_text: [{ text: { content } }],
+                },
+            },
+        });
     }
 };
 exports.NotionService = NotionService;
-exports.NotionService = NotionService = __decorate([
+exports.NotionService = NotionService = NotionService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [config_1.ConfigService])
 ], NotionService);
