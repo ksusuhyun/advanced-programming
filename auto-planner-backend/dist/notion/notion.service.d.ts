@@ -5,7 +5,6 @@ export declare class NotionService {
     private readonly logger;
     constructor(configService: ConfigService);
     private getClientForUser;
-    clearDatabase(userId: string, databaseId: string): Promise<void>;
     addPlanEntry(data: {
         userId: string;
         subject: string;
@@ -17,4 +16,5 @@ export declare class NotionService {
         message: string;
         count: number;
     }>;
+    saveFeedbackToNotion(userId: string, title: string, content: string): Promise<void>;
 }

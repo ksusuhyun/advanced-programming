@@ -220,14 +220,14 @@ export class NotionService {
     /**
      * Notion DB 초기화: 기존 페이지 soft delete (archive)
      */
-    async clearDatabase(userId: string, databaseId: string) {
-      const notion = this.getClientForUser(userId);
-      const pages = await notion.databases.query({ database_id: databaseId });
+    // async clearDatabase(userId: string, databaseId: string) {
+    //   const notion = this.getClientForUser(userId);
+    //   const pages = await notion.databases.query({ database_id: databaseId });
 
-      for (const page of pages.results) {
-        await notion.pages.update({ page_id: page.id, archived: true });
-      }
-    }
+    //   for (const page of pages.results) {
+    //     await notion.pages.update({ page_id: page.id, archived: true });
+    //   }
+    // }
     /**
    * 계획 하나를 Notion에 추가
    */
@@ -267,7 +267,7 @@ export class NotionService {
    * 전체 일정을 Notion에 동기화
    */
   async syncToNotion(dto: SyncToNotionDto) {
-    await this.clearDatabase(dto.userId, dto.databaseId);
+    // await this.clearDatabase(dto.userId, dto.databaseId);
     // 날짜+과목 기준으로 챕터 묶기
     const grouped = new Map<string, { date: string; contentList: string[] }>();
 
@@ -298,6 +298,27 @@ export class NotionService {
       message: '📌 Notion 연동 완료',
       count: grouped.size, // 실제로 작성된 row 개수
     };
+  }
+
+  async saveFeedbackToNotion(userId: string, title: string, content: string) {
+    const notion = this.getClientForUser(userId);
+    const databaseId = this.configService.get<string>('DATABASE_ID');
+    if (!databaseId) throw new Error('❌ DATABASE_ID 누락');
+
+    await notion.pages.create({
+      parent: { database_id: databaseId },
+      properties: {
+        Subject: {
+          title: [{ text: { content: title } }],
+        },
+        Date: {
+          date: { start: new Date().toISOString().split('T')[0] },
+        },
+        Content: {
+          rich_text: [{ text: { content } }],
+        },
+      },
+    });
   }
 }
 

@@ -15,21 +15,17 @@ const config_1 = require("@nestjs/config");
 const user_preference_service_1 = require("../../user-preference/user-preference.service");
 const exam_service_1 = require("../../exam/exam.service");
 const notion_service_1 = require("../../notion/notion.service");
-const llm_client_service_1 = require("../server/llm-client.service");
 const date_utils_1 = require("./utils/date-utils");
-const llm_planner_1 = require("./engine/llm-planner");
 let AiPlannerService = class AiPlannerService {
     configService;
     userPreferenceService;
     examService;
     notionService;
-    llmClient;
-    constructor(configService, userPreferenceService, examService, notionService, llmClient) {
+    constructor(configService, userPreferenceService, examService, notionService) {
         this.configService = configService;
         this.userPreferenceService = userPreferenceService;
         this.examService = examService;
         this.notionService = notionService;
-        this.llmClient = llmClient;
     }
     async generateStudyPlanByUserId(userId) {
         const preference = await this.userPreferenceService.findByUserId(userId);
@@ -41,34 +37,18 @@ let AiPlannerService = class AiPlannerService {
         const databaseId = this.configService.get('DATABASE_ID');
         if (!databaseId)
             throw new common_1.InternalServerErrorException('❌ DATABASE_ID 누락');
-        const useLLM = this.configService.get('USE_LLM')?.toLowerCase() === 'true';
         const mergedSubjects = this.mergeSubjects(exams);
         const estimates = this.estimateDaysByDifficulty(mergedSubjects);
         const studyDates = (0, date_utils_1.getAllStudyDates)(mergedSubjects, preference.studyDays);
-        let rawPlans = [];
-        if (useLLM) {
-            try {
-                const prompt = (0, llm_planner_1.createPrompt)(estimates, studyDates, preference.sessionsPerDay, style);
-                rawPlans = await this.llmClient.generate(prompt);
-                if (!Array.isArray(rawPlans))
-                    throw new Error('Invalid LLM output');
-            }
-            catch (e) {
-                console.warn('⚠️ LLM 실패 - fallback 사용:', e.message);
-                rawPlans = this.assignChaptersFallback(estimates, studyDates, preference.sessionsPerDay);
-            }
-        }
-        else {
-            rawPlans = this.assignChaptersFallback(estimates, studyDates, preference.sessionsPerDay);
-        }
+        const rawPlans = this.assignChaptersFallback(estimates, studyDates, preference.sessionsPerDay, style);
         const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
         for (const result of results) {
             await this.notionService.syncToNotion(result);
         }
-        return this.mapResponseForClient(results);
+        return results;
     }
     estimateDaysByDifficulty(subjects) {
-        const diffWeight = { 상: 1.5, 중: 1.0, 하: 0.7 };
+        const diffWeight = { '상': 1.5, '중': 1.0, '하': 0.7 };
         const result = [];
         for (const subject of subjects) {
             for (const chapter of subject.chapters) {
@@ -84,49 +64,67 @@ let AiPlannerService = class AiPlannerService {
         }
         return result;
     }
-    assignChaptersFallback(chapters, dates, maxPerDay) {
+    assignChaptersFallback(chapters, dates, maxPerDay, style) {
         const result = [];
-        let idx = 0;
-        for (const date of dates) {
-            for (let s = 0; s < maxPerDay && idx < chapters.length; s++, idx++) {
-                const item = chapters[idx];
-                result.push({
-                    subject: item.subject,
-                    date,
-                    content: `${item.title} (p.${item.contentVolume})`,
-                });
+        let dateIndex = 0;
+        let sessionInDay = 0;
+        if (style === 'focus') {
+            const grouped = chapters.reduce((acc, c) => {
+                if (!acc[c.subject])
+                    acc[c.subject] = [];
+                acc[c.subject].push(c);
+                return acc;
+            }, {});
+            for (const subject of Object.keys(grouped)) {
+                const subjectChapters = grouped[subject];
+                for (const chapter of subjectChapters) {
+                    let remaining = chapter.contentVolume;
+                    const pagesPerDay = Math.ceil(chapter.contentVolume / chapter.estimatedDays);
+                    let pageStart = 1;
+                    while (remaining > 0 && dateIndex < dates.length) {
+                        const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
+                        result.push({
+                            subject: chapter.subject,
+                            date: dates[dateIndex],
+                            content: `${chapter.title} (p.${pageStart}-${pageEnd})`,
+                        });
+                        const pagesThisSession = pageEnd - pageStart + 1;
+                        remaining -= pagesThisSession;
+                        pageStart = pageEnd + 1;
+                        dateIndex++;
+                    }
+                }
+            }
+        }
+        else {
+            for (const chapter of chapters) {
+                let remaining = chapter.contentVolume;
+                const pagesPerDay = Math.ceil(chapter.contentVolume / chapter.estimatedDays);
+                let pageStart = 1;
+                while (remaining > 0) {
+                    const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
+                    const date = dates[dateIndex];
+                    result.push({
+                        subject: chapter.subject,
+                        date,
+                        content: `${chapter.title} (p.${pageStart}-${pageEnd})`,
+                    });
+                    const pagesThisSession = pageEnd - pageStart + 1;
+                    remaining -= pagesThisSession;
+                    pageStart = pageEnd + 1;
+                    sessionInDay++;
+                    if (sessionInDay >= maxPerDay) {
+                        dateIndex++;
+                        sessionInDay = 0;
+                    }
+                    if (dateIndex >= dates.length) {
+                        console.warn('⚠️ 날짜 부족');
+                        return result;
+                    }
+                }
             }
         }
         return result;
-    }
-    mapResponseForClient(results) {
-        return results.map(({ subject, startDate, endDate, dailyPlan }) => ({
-            subject,
-            startDate,
-            endDate,
-            dailyPlan,
-        }));
-    }
-    groupDailyPlansBySubject(userId, databaseId, subjects, llmResponse) {
-        const groupedBySubject = {};
-        for (const item of llmResponse) {
-            const subjectKey = item.subject;
-            if (!groupedBySubject[subjectKey]) {
-                const matched = subjects.find(s => s.subject === subjectKey);
-                if (!matched)
-                    throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
-                groupedBySubject[subjectKey] = {
-                    userId,
-                    subject: subjectKey,
-                    startDate: matched.startDate.toString(),
-                    endDate: matched.endDate.toString(),
-                    dailyPlan: [],
-                    databaseId,
-                };
-            }
-            groupedBySubject[subjectKey].dailyPlan.push(`${item.date}: ${item.content}`);
-        }
-        return Object.values(groupedBySubject);
     }
     mergeSubjects(exams) {
         const grouped = {};
@@ -153,6 +151,27 @@ let AiPlannerService = class AiPlannerService {
         }
         return Object.values(grouped);
     }
+    groupDailyPlansBySubject(userId, databaseId, subjects, rawPlans) {
+        const groupedBySubject = {};
+        for (const item of rawPlans) {
+            const subjectKey = item.subject;
+            if (!groupedBySubject[subjectKey]) {
+                const matched = subjects.find(s => s.subject === subjectKey);
+                if (!matched)
+                    throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
+                groupedBySubject[subjectKey] = {
+                    userId,
+                    subject: subjectKey,
+                    startDate: matched.startDate.toString(),
+                    endDate: matched.endDate.toString(),
+                    dailyPlan: [],
+                    databaseId,
+                };
+            }
+            groupedBySubject[subjectKey].dailyPlan.push(`${item.date}: ${item.content}`);
+        }
+        return Object.values(groupedBySubject);
+    }
 };
 exports.AiPlannerService = AiPlannerService;
 exports.AiPlannerService = AiPlannerService = __decorate([
@@ -160,7 +179,6 @@ exports.AiPlannerService = AiPlannerService = __decorate([
     __metadata("design:paramtypes", [config_1.ConfigService,
         user_preference_service_1.UserPreferenceService,
         exam_service_1.ExamService,
-        notion_service_1.NotionService,
-        llm_client_service_1.LlmClientService])
+        notion_service_1.NotionService])
 ], AiPlannerService);
 //# sourceMappingURL=ai-planner.service.js.map

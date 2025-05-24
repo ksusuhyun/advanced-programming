@@ -31,13 +31,6 @@ let NotionService = NotionService_1 = class NotionService {
         }
         return new client_1.Client({ auth: token });
     }
-    async clearDatabase(userId, databaseId) {
-        const notion = this.getClientForUser(userId);
-        const pages = await notion.databases.query({ database_id: databaseId });
-        for (const page of pages.results) {
-            await notion.pages.update({ page_id: page.id, archived: true });
-        }
-    }
     async addPlanEntry(data) {
         const notion = this.getClientForUser(data.userId);
         return await notion.pages.create({
@@ -56,7 +49,6 @@ let NotionService = NotionService_1 = class NotionService {
         });
     }
     async syncToNotion(dto) {
-        await this.clearDatabase(dto.userId, dto.databaseId);
         const grouped = new Map();
         for (const entry of dto.dailyPlan) {
             const [dateRaw, content] = entry.split(':').map(v => v.trim());
@@ -81,6 +73,26 @@ let NotionService = NotionService_1 = class NotionService {
             message: '📌 Notion 연동 완료',
             count: grouped.size,
         };
+    }
+    async saveFeedbackToNotion(userId, title, content) {
+        const notion = this.getClientForUser(userId);
+        const databaseId = this.configService.get('DATABASE_ID');
+        if (!databaseId)
+            throw new Error('❌ DATABASE_ID 누락');
+        await notion.pages.create({
+            parent: { database_id: databaseId },
+            properties: {
+                Subject: {
+                    title: [{ text: { content: title } }],
+                },
+                Date: {
+                    date: { start: new Date().toISOString().split('T')[0] },
+                },
+                Content: {
+                    rich_text: [{ text: { content } }],
+                },
+            },
+        });
     }
 };
 exports.NotionService = NotionService;
