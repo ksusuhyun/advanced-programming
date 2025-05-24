@@ -41,7 +41,8 @@ export class LlmClientService {
       );
 
       const rawText = (response.data as any)?.generated_text || '';
-
+      console.log('🧾 Raw LLM response:', rawText);
+      
       const jsonStart = rawText.indexOf('[');
       const jsonEnd = rawText.lastIndexOf(']');
 
