@@ -6,14 +6,18 @@ import { CreateExamDto } from './dto/create-exam.dto';
 export class ExamService {
   constructor(private prisma: PrismaService) {}
 
-  // 시험 등록
   async create(exam: CreateExamDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { userId: exam.userId },
-    });
+    const user = await this.prisma.user.findUnique({ where: { userId: exam.userId } });
+    if (!user) throw new Error(`User with userId '${exam.userId}' not found`);
 
-    if (!user) {
-      throw new Error(`User with userId '${exam.userId}' not found`);
+    if (!exam.chapters || exam.chapters.length === 0) {
+      throw new Error(`챕터 정보가 누락되었습니다.`);
+    }
+
+    for (const ch of exam.chapters) {
+      if (!ch.chapterTitle || ch.contentVolume === undefined || ch.difficulty === undefined) {
+        throw new Error(`각 챕터에는 chapterTitle, contentVolume, difficulty가 포함되어야 합니다.`);
+      }
     }
 
     const created = await this.prisma.exam.create({
@@ -26,7 +30,7 @@ export class ExamService {
         chapters: {
           create: exam.chapters.map((ch) => ({
             chapterTitle: ch.chapterTitle,
-            difficulty: (ch.difficulty),
+            difficulty: ch.difficulty,
             contentVolume: ch.contentVolume,
           })),
         },
@@ -40,7 +44,6 @@ export class ExamService {
     };
   }
 
-  // 사용자별 시험 목록 조회
   async findByUser(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { userId } });
     if (!user) return { userId, exams: [] };
@@ -53,7 +56,6 @@ export class ExamService {
     return { userId, exams };
   }
 
-  // 사용자별 최신 시험 하나 조회
   async findLatestByUserId(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { userId } });
     if (!user) return null;
@@ -65,45 +67,29 @@ export class ExamService {
     });
   }
 
-  // 사용자 ID + 과목명으로 시험 삭제
   async deleteExamWithChaptersByUser(userId: string, subject: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { userId },
-    });
+    const user = await this.prisma.user.findUnique({ where: { userId } });
     if (!user) throw new Error('사용자를 찾을 수 없습니다.');
 
     const exam = await this.prisma.exam.findFirst({
-      where: {
-        userId: user.id,
-        subject,
-      },
+      where: { userId: user.id, subject },
     });
     if (!exam) {
       return { message: '해당 과목의 시험 정보가 없습니다.' };
     }
 
-    await this.prisma.chapter.deleteMany({
-      where: {
-        examId: exam.id,
-      },
-    });
-
-    await this.prisma.exam.delete({
-      where: {
-        id: exam.id,
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.chapter.deleteMany({ where: { examId: exam.id } }),
+      this.prisma.exam.delete({ where: { id: exam.id } })
+    ]);
 
     return {
       message: `과목 "${subject}"에 대한 시험과 챕터가 삭제되었습니다.`,
     };
   }
 
-  // 사용자 전체 시험 + 챕터 삭제 (트랜잭션)
   async deleteAllExamsByUser(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { userId },
-    });
+    const user = await this.prisma.user.findUnique({ where: { userId } });
     if (!user) throw new Error('사용자를 찾을 수 없습니다.');
 
     const exams = await this.prisma.exam.findMany({
@@ -112,22 +98,13 @@ export class ExamService {
     });
 
     const examIds = exams.map((e) => e.id);
-
     if (examIds.length === 0) {
       return { message: '삭제할 시험이 없습니다.' };
     }
 
     await this.prisma.$transaction([
-      this.prisma.chapter.deleteMany({
-        where: {
-          examId: { in: examIds },
-        },
-      }),
-      this.prisma.exam.deleteMany({
-        where: {
-          id: { in: examIds },
-        },
-      }),
+      this.prisma.chapter.deleteMany({ where: { examId: { in: examIds } } }),
+      this.prisma.exam.deleteMany({ where: { id: { in: examIds } } }),
     ]);
 
     return {

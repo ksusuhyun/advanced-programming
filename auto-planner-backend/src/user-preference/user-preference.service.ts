@@ -2,14 +2,19 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserPreferenceDto } from './dto/user-preference.dto';
 
+export interface StudyPreference {
+  style: string; // 예: 'simple' | 'ai' | 'creative'
+  studyDays: string[];
+  sessionsPerDay: number;
+}
+
 @Injectable()
 export class UserPreferenceService {
   constructor(private readonly prisma: PrismaService) {}
 
   async save(userId: string, dto: UserPreferenceDto) {
-    // userId는 문자열인데 User 모델의 PK(id)는 숫자임. userId로 먼저 찾기
     const user = await this.prisma.user.findUnique({
-      where: { userId }, // userId는 유니크한 필드임
+      where: { userId },
     });
 
     if (!user) {
@@ -17,7 +22,7 @@ export class UserPreferenceService {
     }
 
     const existing = await this.prisma.studyPreference.findUnique({
-      where: { userId: user.id }, // 여긴 숫자 ID
+      where: { userId: user.id },
     });
 
     const data = {
@@ -37,16 +42,29 @@ export class UserPreferenceService {
     }
   }
 
-  async findByUserId(userId: string) {
+  /**
+   * 사용자 ID로부터 studyPreference 조회
+   * @returns style, studyDays, sessionsPerDay 포함 객체
+   */
+  async findByUserId(userId: string): Promise<StudyPreference> {
     const user = await this.prisma.user.findUnique({
       where: { userId },
-      include: { preference: true }, // 관계 조회
+      include: { preference: true },
     });
 
-    if (!user) {
-      throw new NotFoundException(`User ID ${userId} not found`);
+    if (!user || !user.preference) {
+      throw new NotFoundException(`User ID ${userId} preference not found`);
     }
 
-    return user.preference;
+    return {
+      style: user.preference.style,
+      studyDays: user.preference.studyDays,
+      sessionsPerDay: user.preference.sessionsPerDay,
+    };
+  }
+
+  async getStyle(userId: string): Promise<'focus' | 'multi'> {
+    const pref = await this.findByUserId(userId);
+    return pref.style as 'focus' | 'multi';
   }
 }

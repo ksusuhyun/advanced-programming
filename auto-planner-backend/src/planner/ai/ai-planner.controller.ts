@@ -29,8 +29,25 @@ export class AiPlannerController {
       },
     },
   })
-  @ApiOkResponse({ type: [SyncToNotionDto] }) // ✅ 이거 추가
-  async generatePlan(@Body() body: AiGeneratePlanDto) { // ✅ inline 타입 대신 DTO 사용
+  @ApiOkResponse({
+    description: '생성된 학습 계획 목록',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          subject: { type: 'string', example: '수학' },
+          startDate: { type: 'string', example: '2025-06-01' },
+          endDate: { type: 'string', example: '2025-06-15' },
+          dailyPlan: {
+            type: 'array',
+            items: { type: 'string', example: '6/1: 수열의 개념' },
+          },
+        },
+      },
+    },
+  })
+  async generatePlan(@Body() body: AiGeneratePlanDto) {
     return this.aiPlannerService.generateStudyPlanByUserId(body.userId);
   }
 }
