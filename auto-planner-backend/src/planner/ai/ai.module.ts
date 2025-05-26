@@ -5,12 +5,11 @@ import { AiPlannerController } from './ai-planner.controller';
 import { UserPreferenceModule } from '../../user-preference/user-preference.module'; // ✅ 사용자 선호도 모듈 추가
 import { ExamModule } from '../../exam/exam.module'; // ✅ 시험 정보 모듈 추가
 import { NotionModule } from '../../notion/notion.module'; // ✅ Notion 연동 모듈 추가
-import { LlmClientService } from '../server/llm-client.service';
+import { LlmClientService } from './server/llm-client.service';
 
 
 @Module({
   imports: [
-    NotionModule,
     HttpModule, // HTTP 요청 기능을 위해 HttpModule 추가
     UserPreferenceModule, // ✅ 사용자 선호도 조회를 위해 필요
     ExamModule,            // ✅ 시험 정보 조회를 위해 필요

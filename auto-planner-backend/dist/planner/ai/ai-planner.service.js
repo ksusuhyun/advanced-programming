@@ -16,6 +16,7 @@ const user_preference_service_1 = require("../../user-preference/user-preference
 const exam_service_1 = require("../../exam/exam.service");
 const notion_service_1 = require("../../notion/notion.service");
 const date_utils_1 = require("./utils/date-utils");
+const date_fns_1 = require("date-fns");
 let AiPlannerService = class AiPlannerService {
     configService;
     userPreferenceService;
@@ -27,7 +28,7 @@ let AiPlannerService = class AiPlannerService {
         this.examService = examService;
         this.notionService = notionService;
     }
-    async generateStudyPlanByUserId(userId) {
+    async generateStudyPlan(userId) {
         const preference = await this.userPreferenceService.findByUserId(userId);
         const style = await this.userPreferenceService.getStyle(userId);
         const { exams } = await this.examService.findByUser(userId);
@@ -39,16 +40,21 @@ let AiPlannerService = class AiPlannerService {
             throw new common_1.InternalServerErrorException('❌ DATABASE_ID 누락');
         const mergedSubjects = this.mergeSubjects(exams);
         const estimates = this.estimateDaysByDifficulty(mergedSubjects);
-        const studyDates = (0, date_utils_1.getAllStudyDates)(mergedSubjects, preference.studyDays);
-        const rawPlans = this.assignChaptersFallback(estimates, studyDates, preference.sessionsPerDay, style);
+        let studyDates = (0, date_utils_1.getAllStudyDates)(mergedSubjects, preference.studyDays);
+        const latestEndDate = Math.max(...mergedSubjects.map(s => new Date(s.endDate).getTime()));
+        studyDates = studyDates.filter(dateStr => {
+            const date = new Date(dateStr);
+            return date.getTime() < latestEndDate;
+        });
+        const rawPlans = this.assignChaptersSmartMulti(estimates, mergedSubjects, studyDates, preference.sessionsPerDay);
         const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
         for (const result of results) {
             await this.notionService.syncToNotion(result);
         }
-        return results;
+        return this.mapResponseForClient(results);
     }
     estimateDaysByDifficulty(subjects) {
-        const diffWeight = { '상': 1.5, '중': 1.0, '하': 0.7 };
+        const diffWeight = { 1: 0.7, 2: 0.85, 3: 1.0, 4: 1.2, 5: 1.5 };
         const result = [];
         for (const subject of subjects) {
             for (const chapter of subject.chapters) {
@@ -64,67 +70,121 @@ let AiPlannerService = class AiPlannerService {
         }
         return result;
     }
-    assignChaptersFallback(chapters, dates, maxPerDay, style) {
-        const result = [];
-        let dateIndex = 0;
-        let sessionInDay = 0;
-        if (style === 'focus') {
-            const grouped = chapters.reduce((acc, c) => {
-                if (!acc[c.subject])
-                    acc[c.subject] = [];
-                acc[c.subject].push(c);
-                return acc;
-            }, {});
-            for (const subject of Object.keys(grouped)) {
-                const subjectChapters = grouped[subject];
-                for (const chapter of subjectChapters) {
-                    let remaining = chapter.contentVolume;
-                    const pagesPerDay = Math.ceil(chapter.contentVolume / chapter.estimatedDays);
-                    let pageStart = 1;
-                    while (remaining > 0 && dateIndex < dates.length) {
-                        const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
-                        result.push({
-                            subject: chapter.subject,
-                            date: dates[dateIndex],
-                            content: `${chapter.title} (p.${pageStart}-${pageEnd})`,
-                        });
-                        const pagesThisSession = pageEnd - pageStart + 1;
-                        remaining -= pagesThisSession;
-                        pageStart = pageEnd + 1;
-                        dateIndex++;
-                    }
-                }
-            }
+    assignChaptersSmartMulti(chapters, subjects, dates, maxPerDay) {
+        const plans = [];
+        const finalReviewDates = {};
+        const activeDates = [];
+        for (const subj of subjects) {
+            const end = new Date(subj.endDate);
+            const d1 = new Date(end);
+            const d2 = new Date(end);
+            d1.setDate(d1.getDate() - 1);
+            d2.setDate(d2.getDate() - 2);
+            finalReviewDates[subj.subject] = [(0, date_fns_1.format)(d2, 'yyyy-MM-dd'), (0, date_fns_1.format)(d1, 'yyyy-MM-dd')];
         }
-        else {
-            for (const chapter of chapters) {
-                let remaining = chapter.contentVolume;
-                const pagesPerDay = Math.ceil(chapter.contentVolume / chapter.estimatedDays);
-                let pageStart = 1;
-                while (remaining > 0) {
+        const filteredDates = dates.filter(date => !Object.values(finalReviewDates).flat().includes(date));
+        const schedule = {};
+        for (const date of filteredDates) {
+            schedule[date] = { slots: 0, plans: [] };
+        }
+        const sortedChapters = [...chapters].sort((a, b) => {
+            const impA = subjects.find(s => s.subject === a.subject)?.importance ?? 1;
+            const impB = subjects.find(s => s.subject === b.subject)?.importance ?? 1;
+            return impB - impA || b.contentVolume - a.contentVolume;
+        });
+        for (const chapter of sortedChapters) {
+            let remaining = chapter.contentVolume;
+            const pagesPerDay = Math.max(1, Math.ceil(chapter.contentVolume / chapter.estimatedDays));
+            let pageStart = 1;
+            for (const date of filteredDates) {
+                if (remaining <= 0)
+                    break;
+                const availableSlots = maxPerDay - schedule[date].slots;
+                if (availableSlots <= 0)
+                    continue;
+                for (let s = 0; s < availableSlots && remaining > 0; s++) {
                     const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
-                    const date = dates[dateIndex];
-                    result.push({
-                        subject: chapter.subject,
-                        date,
-                        content: `${chapter.title} (p.${pageStart}-${pageEnd})`,
-                    });
-                    const pagesThisSession = pageEnd - pageStart + 1;
-                    remaining -= pagesThisSession;
+                    const content = `${chapter.title} (p.${pageStart}-${pageEnd})`;
+                    schedule[date].plans.push({ subject: chapter.subject, content });
+                    schedule[date].slots += 1;
+                    remaining -= (pageEnd - pageStart + 1);
                     pageStart = pageEnd + 1;
-                    sessionInDay++;
-                    if (sessionInDay >= maxPerDay) {
-                        dateIndex++;
-                        sessionInDay = 0;
-                    }
-                    if (dateIndex >= dates.length) {
-                        console.warn('⚠️ 날짜 부족');
-                        return result;
-                    }
                 }
             }
+            if (remaining > 0 && remaining <= pagesPerDay) {
+                for (const date of filteredDates) {
+                    const pageEnd = pageStart + remaining - 1;
+                    const content = `${chapter.title} (p.${pageStart}-${pageEnd})`;
+                    schedule[date].plans.push({ subject: chapter.subject, content });
+                    break;
+                }
+                remaining = 0;
+            }
         }
-        return result;
+        for (const subject of subjects) {
+            for (const date of finalReviewDates[subject.subject]) {
+                plans.push({
+                    subject: subject.subject,
+                    date,
+                    content: `복습: 전체 요약 (${subject.subject})`,
+                });
+            }
+        }
+        for (const date of filteredDates) {
+            for (const item of schedule[date].plans) {
+                plans.push({ subject: item.subject, date, content: item.content });
+            }
+        }
+        plans.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        return plans;
+    }
+    mapResponseForClient(results) {
+        return results.map(({ subject, startDate, endDate, dailyPlan, userId, databaseId }) => ({
+            subject,
+            startDate,
+            endDate,
+            dailyPlan,
+            userId,
+            databaseId,
+        }));
+    }
+    groupDailyPlansBySubject(userId, databaseId, subjects, rawPlans) {
+        const groupedBySubject = {};
+        for (const item of rawPlans) {
+            const subjectKey = item.subject;
+            if (!groupedBySubject[subjectKey]) {
+                const matched = subjects.find(s => s.subject === subjectKey);
+                if (!matched)
+                    throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
+                groupedBySubject[subjectKey] = {
+                    userId,
+                    subject: subjectKey,
+                    startDate: matched.startDate.toString(),
+                    endDate: matched.endDate.toString(),
+                    dailyPlan: [],
+                    databaseId,
+                };
+            }
+            const dailyPlan = groupedBySubject[subjectKey].dailyPlan;
+            const date = item.date;
+            const fullContent = item.content;
+            const chapterTitle = fullContent.split(' (')[0];
+            const pageRange = fullContent.match(/\(p\.(\d+)-(\d+)\)/);
+            const existingIdx = dailyPlan.findIndex(entry => entry.startsWith(`${date}: ${chapterTitle}`));
+            if (existingIdx !== -1 && pageRange) {
+                const existing = dailyPlan[existingIdx];
+                const existingPage = existing.match(/\(p\.(\d+)-(\d+)\)/);
+                if (existingPage) {
+                    const minPage = Math.min(Number(existingPage[1]), Number(pageRange[1]));
+                    const maxPage = Math.max(Number(existingPage[2]), Number(pageRange[2]));
+                    dailyPlan[existingIdx] = `${date}: ${chapterTitle} (p.${minPage}-${maxPage})`;
+                }
+            }
+            else {
+                dailyPlan.push(`${date}: ${fullContent}`);
+            }
+        }
+        return Object.values(groupedBySubject);
     }
     mergeSubjects(exams) {
         const grouped = {};
@@ -150,27 +210,6 @@ let AiPlannerService = class AiPlannerService {
             }
         }
         return Object.values(grouped);
-    }
-    groupDailyPlansBySubject(userId, databaseId, subjects, rawPlans) {
-        const groupedBySubject = {};
-        for (const item of rawPlans) {
-            const subjectKey = item.subject;
-            if (!groupedBySubject[subjectKey]) {
-                const matched = subjects.find(s => s.subject === subjectKey);
-                if (!matched)
-                    throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
-                groupedBySubject[subjectKey] = {
-                    userId,
-                    subject: subjectKey,
-                    startDate: matched.startDate.toString(),
-                    endDate: matched.endDate.toString(),
-                    dailyPlan: [],
-                    databaseId,
-                };
-            }
-            groupedBySubject[subjectKey].dailyPlan.push(`${item.date}: ${item.content}`);
-        }
-        return Object.values(groupedBySubject);
     }
 };
 exports.AiPlannerService = AiPlannerService;

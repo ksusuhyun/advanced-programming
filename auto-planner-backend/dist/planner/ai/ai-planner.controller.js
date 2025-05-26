@@ -15,7 +15,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AiPlannerController = void 0;
 const common_1 = require("@nestjs/common");
 const ai_planner_service_1 = require("./ai-planner.service");
-const ai_planner_dto_1 = require("./dto/ai-planner.dto");
 const swagger_1 = require("@nestjs/swagger");
 let AiPlannerController = class AiPlannerController {
     aiPlannerService;
@@ -23,16 +22,15 @@ let AiPlannerController = class AiPlannerController {
         this.aiPlannerService = aiPlannerService;
     }
     async generatePlan(body) {
-        return this.aiPlannerService.generateStudyPlanByUserId(body.userId);
+        return this.aiPlannerService.generateStudyPlan(body.userId);
     }
 };
 exports.AiPlannerController = AiPlannerController;
 __decorate([
     (0, common_1.Post)('/generate'),
     (0, swagger_1.ApiOperation)({
-        summary: 'GPT 기반 학습 계획 생성',
-        description: `사용자의 시험 정보 및 preference를 기반으로 LLM(FastAPI) 또는 내부 rule engine을 활용하여 학습 계획을 생성합니다.
-  LLM 호출이 실패하거나 비활성화된 경우, 내부 TypeScript 로직으로 fallback 처리됩니다.`,
+        summary: '학습 계획 생성 (LLM 제외)',
+        description: '유저 ID 기반으로 내부 rule engine을 사용하여 학습 계획을 생성하고 Notion에 동기화합니다.',
     }),
     (0, swagger_1.ApiBody)({
         schema: {
@@ -41,35 +39,34 @@ __decorate([
             properties: {
                 userId: {
                     type: 'string',
-                    example: 'user123',
-                    description: '사용자 고유 ID',
+                    example: '202255150',
                 },
             },
         },
     }),
     (0, swagger_1.ApiOkResponse)({
-        description: `생성된 학습 계획 목록 (Notion에 동기화됨). 
-  응답은 JSON 배열이며, 각 항목은 { subject, date, content } 형식입니다.`,
+        description: '성공적으로 생성된 학습 계획',
         schema: {
             type: 'array',
             items: {
                 type: 'object',
                 properties: {
-                    subject: { type: 'string', example: '의료기기인허가' },
-                    startDate: { type: 'string', example: '2025-06-01' },
-                    endDate: { type: 'string', example: '2025-06-15' },
+                    subject: { type: 'string', example: '시계열분석' },
+                    startDate: { type: 'string', example: '2025-05-23' },
+                    endDate: { type: 'string', example: '2025-06-11' },
+                    userId: { type: 'string', example: '202255150' },
+                    databaseId: { type: 'string', example: 'notion-db-id' },
                     dailyPlan: {
                         type: 'array',
-                        items: { type: 'string', example: '6/1: Chapter 7 (p.1-10)' },
+                        items: { type: 'string', example: '6/1: Chapter 1 (p.1-10)' },
                     },
-                    databaseId: { type: 'string', example: 'notion-db-id-abc123' },
                 },
             },
         },
     }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [ai_planner_dto_1.AiGeneratePlanDto]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AiPlannerController.prototype, "generatePlan", null);
 exports.AiPlannerController = AiPlannerController = __decorate([

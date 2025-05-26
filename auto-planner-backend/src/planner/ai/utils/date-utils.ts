@@ -19,20 +19,26 @@ export function getAllStudyDates(subjects: Subject[], studyDays: string[]): stri
 
   for (const subj of subjects) {
     console.log('📅 과목 기간:', subj.subject, subj.startDate, '→', subj.endDate);
-    console.log('📅 기간:', subj.startDate, '→', subj.endDate);
+    
     const interval = eachDayOfInterval({
       start: new Date(subj.startDate),
       end: new Date(subj.endDate),
     });
 
     for (const d of interval) {
-      console.log('📆 날짜:', format(d, 'yyyy-MM-dd'), '요일:', d.getDay());
-      if (allowed.includes(d.getDay())) {
-        allDates.add(format(d, 'M/d'));
+      const dayOfWeek = d.getDay();
+      if (allowed.includes(dayOfWeek)) {
+        const formatted = format(d, 'yyyy-MM-dd'); // 날짜 포맷을 yyyy-MM-dd로 통일
+        allDates.add(formatted);
+        console.log('📆 추가된 날짜:', formatted, '요일:', dayOfWeek);
       }
     }
   }
 
-  return Array.from(allDates).sort();
-}
+  const sorted = Array.from(allDates).sort((a, b) => {
+    return new Date(a).getTime() - new Date(b).getTime();
+  });
 
+  console.log('✅ 전체 학습 가능 날짜:', sorted);
+  return sorted;
+}

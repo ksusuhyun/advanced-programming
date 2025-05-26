@@ -51,9 +51,12 @@ let NotionService = NotionService_1 = class NotionService {
     async syncToNotion(dto) {
         const grouped = new Map();
         for (const entry of dto.dailyPlan) {
-            const [dateRaw, content] = entry.split(':').map(v => v.trim());
-            const parsed = (0, date_fns_1.parse)(dateRaw, 'M/d', new Date(dto.startDate));
-            const formattedDate = (0, date_fns_1.format)(parsed, 'yyyy-MM-dd');
+            const colonIndex = entry.indexOf(':');
+            const dateRaw = entry.slice(0, colonIndex).trim();
+            const content = entry.slice(colonIndex + 1).trim();
+            const formattedDate = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw)
+                ? dateRaw
+                : (0, date_fns_1.format)((0, date_fns_1.parse)(dateRaw, 'M/d', new Date(dto.startDate)), 'yyyy-MM-dd');
             const key = `${dto.subject}_${formattedDate}`;
             if (!grouped.has(key)) {
                 grouped.set(key, { date: formattedDate, contentList: [] });
