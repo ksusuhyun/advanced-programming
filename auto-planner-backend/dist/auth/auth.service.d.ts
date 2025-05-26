@@ -15,6 +15,7 @@ export declare class AuthService {
     }>;
     login(dto: LoginDto): Promise<{
         access_token: string;
+        userId: string;
     }>;
     signup(dto: CreateUserDto): Promise<{
         userId: string;

@@ -271,10 +271,16 @@ export class NotionService {
     // 날짜+과목 기준으로 챕터 묶기
     const grouped = new Map<string, { date: string; contentList: string[] }>();
 
+    // ✨ 이 부분 교체(Notion에 페이지수가 반영되지 않는 부분해결)
     for (const entry of dto.dailyPlan) {
-      const [dateRaw, content] = entry.split(':').map(v => v.trim());
-      const parsed = parse(dateRaw, 'M/d', new Date(dto.startDate));
-      const formattedDate = format(parsed, 'yyyy-MM-dd');
+      const colonIndex = entry.indexOf(':');
+      const dateRaw = entry.slice(0, colonIndex).trim();
+      const content = entry.slice(colonIndex + 1).trim();
+
+      // 날짜가 이미 'yyyy-MM-dd' 형식이면 그대로 사용
+      const formattedDate = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw)
+        ? dateRaw
+        : format(parse(dateRaw, 'M/d', new Date(dto.startDate)), 'yyyy-MM-dd');
 
       const key = `${dto.subject}_${formattedDate}`;
       if (!grouped.has(key)) {
@@ -282,6 +288,7 @@ export class NotionService {
       }
       grouped.get(key)!.contentList.push(content);
     }
+
 
     // 각 그룹에 대해 Notion entry 생성
     for (const { date, contentList } of grouped.values()) {
