@@ -5,7 +5,7 @@
   export let onRemove;
   export let userId;
 
-  import { deleteExam } from '$lib/api/exam'; // API 호출 함수 
+  import { deleteExam } from '$lib/api/exam'; // API 호출 함수 import 
 
   const difficultyOptions = ['선택', '쉬움', '보통', '어려움'];
 
