@@ -6,9 +6,11 @@
   export let userId;
   export let token;
 
-  import { deleteExam } from '$lib/api/exam'; // API 호출 함수 import 
+  import { deleteExam, createExam } from '$lib/api/exam'; // API 호출 함수 import 
+
 
   const difficultyOptions = ['선택', '쉬움', '보통', '어려움'];
+
 
   function addUnit() {
     subjectData.units = [...subjectData.units, { unitName: '', studyAmount: '', difficulty: '선택' }];
@@ -42,41 +44,33 @@
   }
 
   async function handleConfirm() {
-  try {
-    // 챕터 리스트 변환
-    const chapters = subjectData.units.map(unit => ({
-      chapterTitle: unit.unitName,
-      contentVolume: unit.studyAmount,
-      difficulty: convertDifficulty(unit.difficulty),
-    }));
+    let examData;
+    
+    try {
+      const chapters = subjectData.units.map(unit => ({
+        chapterTitle: unit.unitName,
+        contentVolume: unit.studyAmount,
+        difficulty: unit.difficulty, // ✅ 문자열 그대로 저장
+      }));
 
-    const examData = {
-      userId,
-      subject: subjectData.subjectName,
-      startDate: subjectData.startDate,
-      endDate: subjectData.endDate,
-      importance: subjectData.importance,
-      chapters,
-    };
+      const examData = {
+        userId,
+        subject: subjectData.subjectName,
+        startDate: subjectData.startDate,
+        endDate: subjectData.endDate,
+        importance: subjectData.importance,
+        chapters,
+      };
 
-    await createExam(examData, token);
-    alert('✅ 시험 등록 완료!');
-  } catch (err) {
-    alert(`시험 등록 실패: ${err.message}`);
+      console.log('✅ examData to send:', examData);
+
+      await createExam(examData, token);
+      alert('✅ 시험 등록 완료!');
+    } catch (err) {
+      alert(`시험 등록 실패: ${err.message}`);
+    }
+
   }
-}
-
-// 난이도 문자열 → 숫자 매핑
-function convertDifficulty(diff: string): number {
-  switch (diff) {
-    case '쉬움': return 1;
-    case '보통': return 2;
-    case '어려움': return 3;
-    default: return 0; // 선택 안 된 경우
-  }
-}
-
-
 
 </script>
 

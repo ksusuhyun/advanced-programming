@@ -13,6 +13,7 @@
     try {
       const result = await login({ userId, password }); // ✅ userId 키 사용
       sessionStorage.setItem('token', result.access_token);
+      sessionStorage.setItem('userId', result.userId);
       loginError = false;
       goto('/main');
     } catch (e) {

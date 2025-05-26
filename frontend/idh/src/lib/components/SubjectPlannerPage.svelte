@@ -1,9 +1,11 @@
 <script>
   import Header from '$lib/components/Header.svelte';
   import SubjectForm from '$lib/components/SubjectForm.svelte';
+	import { User } from 'lucide-svelte';
 
   // 로그인 시 저장된 토큰을 sessionStorage에서 가져옴
   const token = sessionStorage.getItem('token');
+  const userId = sessionStorage.getItem('userId');
 
   let subjects = [
     {
@@ -55,6 +57,7 @@
           onChange={handleSubjectChange}
           onRemove={removeSubject}
           token={token} 
+          userId={userId}
         />
       {/each}
 
