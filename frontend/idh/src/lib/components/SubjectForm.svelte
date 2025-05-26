@@ -41,6 +41,42 @@
     }
   }
 
+  async function handleConfirm() {
+  try {
+    // 챕터 리스트 변환
+    const chapters = subjectData.units.map(unit => ({
+      chapterTitle: unit.unitName,
+      contentVolume: unit.studyAmount,
+      difficulty: convertDifficulty(unit.difficulty),
+    }));
+
+    const examData = {
+      userId,
+      subject: subjectData.subjectName,
+      startDate: subjectData.startDate,
+      endDate: subjectData.endDate,
+      importance: subjectData.importance,
+      chapters,
+    };
+
+    await createExam(examData, token);
+    alert('✅ 시험 등록 완료!');
+  } catch (err) {
+    alert(`시험 등록 실패: ${err.message}`);
+  }
+}
+
+// 난이도 문자열 → 숫자 매핑
+function convertDifficulty(diff: string): number {
+  switch (diff) {
+    case '쉬움': return 1;
+    case '보통': return 2;
+    case '어려움': return 3;
+    default: return 0; // 선택 안 된 경우
+  }
+}
+
+
 
 </script>
 
