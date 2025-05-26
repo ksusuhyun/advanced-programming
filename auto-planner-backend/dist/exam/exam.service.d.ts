@@ -10,8 +10,8 @@ export declare class ExamService {
                 id: number;
                 createdAt: Date;
                 chapterTitle: string;
-                difficulty: number;
-                contentVolume: number;
+                difficulty: string;
+                contentVolume: string;
                 updatedAt: Date;
                 examId: number;
             }[];
@@ -33,8 +33,8 @@ export declare class ExamService {
                 id: number;
                 createdAt: Date;
                 chapterTitle: string;
-                difficulty: number;
-                contentVolume: number;
+                difficulty: string;
+                contentVolume: string;
                 updatedAt: Date;
                 examId: number;
             }[];
@@ -54,8 +54,8 @@ export declare class ExamService {
             id: number;
             createdAt: Date;
             chapterTitle: string;
-            difficulty: number;
-            contentVolume: number;
+            difficulty: string;
+            contentVolume: string;
             updatedAt: Date;
             examId: number;
         }[];
