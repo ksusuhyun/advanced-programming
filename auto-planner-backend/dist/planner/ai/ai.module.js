@@ -14,14 +14,13 @@ const ai_planner_controller_1 = require("./ai-planner.controller");
 const user_preference_module_1 = require("../../user-preference/user-preference.module");
 const exam_module_1 = require("../../exam/exam.module");
 const notion_module_1 = require("../../notion/notion.module");
-const llm_client_service_1 = require("../server/llm-client.service");
+const llm_client_service_1 = require("./server/llm-client.service");
 let AiModule = class AiModule {
 };
 exports.AiModule = AiModule;
 exports.AiModule = AiModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            notion_module_1.NotionModule,
             axios_1.HttpModule,
             user_preference_module_1.UserPreferenceModule,
             exam_module_1.ExamModule,
