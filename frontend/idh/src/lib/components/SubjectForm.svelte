@@ -3,6 +3,9 @@
   export let subjectData;
   export let onChange;
   export let onRemove;
+  export let userId;
+
+  import { deleteExam } from '$lib/api/exam'; // API 호출 함수 
 
   const difficultyOptions = ['선택', '쉬움', '보통', '어려움'];
 
@@ -27,6 +30,16 @@
     subjectData.units[i][field] = value;
     onChange(index, subjectData);
   }
+
+  async function handleDelete() {
+    try {
+      await deleteExam(userId, subjectData.subjectName); // ✅ 서버에 삭제 요청
+      onRemove(index); // ✅ UI에서도 과목 제거
+    } catch (err) {
+      alert(`시험 삭제 실패: ${err.message}`); // 실패 시 알림
+    }
+  }
+
 </script>
 
 <div class="subject-card">
@@ -75,9 +88,10 @@
   </div>
 
   <div class="button-group">
-    <button type="button" on:click={() => onRemove(index)} class="delete-btn">❌ 과목 삭제</button>
+    <button type="button" on:click={handleDelete} class="delete-btn">❌ 과목 삭제</button>
     <button type="button" on:click={handleConfirm} class="confirm-btn">✅ 확인</button>
   </div>
+
 </div>
 
 
