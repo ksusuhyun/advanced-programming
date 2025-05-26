@@ -4,6 +4,7 @@
   export let onChange;
   export let onRemove;
   export let userId;
+  export let token;
 
   import { deleteExam } from '$lib/api/exam'; // API 호출 함수 import 
 
@@ -30,15 +31,16 @@
     subjectData.units[i][field] = value;
     onChange(index, subjectData);
   }
-
+    
   async function handleDelete() {
     try {
-      await deleteExam(userId, subjectData.subjectName); // ✅ 서버에 삭제 요청
-      onRemove(index); // ✅ UI에서도 과목 제거
+      await deleteExam(userId, subjectData.subjectName, token); // 토큰 포함
+      onRemove(index); // UI에서도 제거
     } catch (err) {
-      alert(`시험 삭제 실패: ${err.message}`); // 실패 시 알림
+      alert(`시험 삭제 실패: ${err.message}`);
     }
   }
+
 
 </script>
 

@@ -2,16 +2,21 @@
  * 특정 사용자의 특정 과목 시험 정보를 서버에서 삭제.
  * @param userId - 사용자 ID
  * @param subject - 과목명
+ * @param token - 인증 토큰 (Bearer)
  * @returns 삭제 결과 메시지
  */
-export async function deleteExam(userId: string, subject: string): Promise<{ message: string }> {
-  const encodedSubject = encodeURIComponent(subject); // URL 인코딩 (공백, 특수문자 대응)
+export async function deleteExam(
+  userId: string,
+  subject: string,
+  token: string
+): Promise<{ message: string }> {
+  const encodedSubject = encodeURIComponent(subject); // 공백, 특수문자 인코딩
 
-  const res = await fetch(`http://localhost:3000/exam/${userId}/${encodedSubject}`, {
+  const res = await fetch(`https://advanced-programming.onrender.com/exam/${userId}/${encodedSubject}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
-      // Authorization 헤더 필요 시 여기에 추가
+      'Authorization': `Bearer ${token}`, // 토큰 추가
     },
   });
 
@@ -22,3 +27,28 @@ export async function deleteExam(userId: string, subject: string): Promise<{ mes
 
   return res.json(); // { message: "삭제되었습니다." }
 }
+
+/**
+ * 특정 사용자의 시험 정보를 서버에 등록
+ * @param examData - CreateExamDto 형태
+ * @param token - 인증 토큰
+ * @returns 등록 결과 메시지
+ */
+export async function createExam(examData: any, token: string): Promise<{ message: string }> {
+  const res = await fetch(`https://advanced-programming.onrender.com/exam`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(examData),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || '시험 등록 실패');
+  }
+
+  return res.json();
+}
+
