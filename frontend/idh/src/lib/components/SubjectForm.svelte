@@ -3,8 +3,14 @@
   export let subjectData;
   export let onChange;
   export let onRemove;
+  export let userId;
+  export let token;
+
+  import { deleteExam, createExam } from '$lib/api/exam'; // API 호출 함수 import 
+
 
   const difficultyOptions = ['선택', '쉬움', '보통', '어려움'];
+
 
   function addUnit() {
     subjectData.units = [...subjectData.units, { unitName: '', studyAmount: '', difficulty: '선택' }];
@@ -27,6 +33,45 @@
     subjectData.units[i][field] = value;
     onChange(index, subjectData);
   }
+    
+  async function handleDelete() {
+    try {
+      await deleteExam(userId, subjectData.subjectName, token); // 토큰 포함
+      onRemove(index); // UI에서도 제거
+    } catch (err) {
+      alert(`시험 삭제 실패: ${err.message}`);
+    }
+  }
+
+  async function handleConfirm() {
+    let examData;
+    
+    try {
+      const chapters = subjectData.units.map(unit => ({
+        chapterTitle: unit.unitName,
+        contentVolume: unit.studyAmount,
+        difficulty: unit.difficulty, // ✅ 문자열 그대로 저장
+      }));
+
+      const examData = {
+        userId,
+        subject: subjectData.subjectName,
+        startDate: subjectData.startDate,
+        endDate: subjectData.endDate,
+        importance: subjectData.importance,
+        chapters,
+      };
+
+      console.log('✅ examData to send:', examData);
+
+      await createExam(examData, token);
+      alert('✅ 시험 등록 완료!');
+    } catch (err) {
+      alert(`시험 등록 실패: ${err.message}`);
+    }
+
+  }
+
 </script>
 
 <div class="subject-card">
@@ -74,9 +119,11 @@
     </button>
   </div>
 
-  <button type="button" on:click={() => onRemove(index)} class="add-subject-btn">
-    ❌ 과목 삭제
-  </button>
+  <div class="button-group">
+    <button type="button" on:click={handleDelete} class="delete-btn">❌ 과목 삭제</button>
+    <button type="button" on:click={handleConfirm} class="confirm-btn">✅ 확인</button>
+  </div>
+
 </div>
 
 
@@ -283,4 +330,26 @@
     text-align: center;
     font-weight: 400;
   }
+
+  .button-group {
+    display: flex;
+    gap: 16px;
+  }
+
+  .delete-btn,
+  .confirm-btn {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    padding: 12px;
+    height: 50px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background-color: #ffffff;
+    color: #374151;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+
+
 </style> 
