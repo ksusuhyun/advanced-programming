@@ -122,7 +122,7 @@ async function checkDuplicate() {
     }
 
     try {
-      await signupUser({ userId, password });
+      await signupUser({ userId: userId.trim(), password: password.trim() });
       alert('가입이 완료되었습니다!');
       goto('/');
     } catch (e) {
@@ -406,6 +406,10 @@ async function checkDuplicate() {
               placeholder="아이디를 입력하세요"
               class:duplicate-success={duplicateStatus === 'available'}
               class:duplicate-fail={duplicateStatus === 'unavailable'}
+              on:input={() => {
+                userId = userId.trimStart(); // ✅ 공백 방지
+                duplicateStatus = null; // ✅ 입력 시 중복확인 상태 초기화
+              }}
               on:keydown={handleKeydown}
               autocomplete="username"
             />
