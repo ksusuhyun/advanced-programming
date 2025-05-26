@@ -12,6 +12,13 @@ export async function login(credentials: { userId: string; password: string }) {
     throw new Error(error.message || '로그인 실패');
   }
 
-  return await res.json();
+  const data = await res.json();
+
+  // 로그인 성공 시 userId 저장
+  if (data?.userId) {
+    localStorage.setItem('userId', data.userId);
+  }
+
+  return data;
 }
   

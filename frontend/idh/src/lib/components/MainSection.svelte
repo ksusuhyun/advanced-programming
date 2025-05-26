@@ -1,7 +1,19 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { saveUserPreference } from '$lib/api/userPreference';
 
-  let userId = 'user123';
+  let userId = ''; // 초기값 비움
+
+  onMount(() => {
+    const storedId = localStorage.getItem('userId');
+    if (storedId) {
+      userId = storedId;
+    } else {
+      alert('로그인이 필요합니다.');
+      // 예: 로그인 페이지로 이동
+      window.location.href = '/';
+    }
+  });
 
   let learningStyle: 'focus' | 'parallel' = 'focus';
   let studyDays: { [key: string]: boolean } = {
@@ -33,6 +45,7 @@
     try {
       await saveUserPreference(userId, body);
       alert('✅ 설정이 저장되었습니다!');
+      window.location.href = '/userinfo';
     } catch (err) {
       console.error(err);
       alert('⚠️ 설정 저장 실패!');
@@ -40,13 +53,12 @@
   }
 </script>
 
-
 <section class="main-section-container">
   <div class="content-card">
     <div class="profile-header">
       <div class="avatar-placeholder"></div>
       <div class="user-info">
-        <p class="user-email">user123@email.com</p>
+        <p class="user-email">{userId}@email.com</p>
         <p class="manage-settings-text">학습 설정 관리</p>
       </div>
     </div>
