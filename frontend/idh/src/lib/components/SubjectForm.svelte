@@ -6,51 +6,52 @@
   export let userId;
   export let token;
 
-  import { deleteExam, createExam } from '$lib/api/exam'; // API 호출 함수 import 
-
+  import { deleteExam, createExam } from '$lib/api/exam';
 
   const difficultyOptions = ['선택', '쉬움', '보통', '어려움'];
 
-
   function addUnit() {
-    subjectData.units = [...subjectData.units, { unitName: '', studyAmount: '', difficulty: '선택' }];
-    onChange(index, subjectData);
+    const newUnits = [...subjectData.units, { unitName: '', studyAmount: '', difficulty: '선택' }];
+    const newSubject = { ...subjectData, units: newUnits };
+    onChange(index, newSubject);
   }
 
   function removeUnit(i) {
     if (subjectData.units.length > 1) {
-      subjectData.units = subjectData.units.filter((_, j) => j !== i);
-      onChange(index, subjectData);
+      const newUnits = subjectData.units.filter((_, j) => j !== i);
+      const newSubject = { ...subjectData, units: newUnits };
+      onChange(index, newSubject);
     }
   }
 
   function handleFieldChange(field, value) {
-    subjectData[field] = value;
-    onChange(index, subjectData);
+    const newSubject = { ...subjectData, [field]: value };
+    onChange(index, newSubject);
   }
 
   function handleUnitChange(i, field, value) {
-    subjectData.units[i][field] = value;
-    onChange(index, subjectData);
+    const newUnits = subjectData.units.map((unit, idx) =>
+      idx === i ? { ...unit, [field]: value } : unit
+    );
+    const newSubject = { ...subjectData, units: newUnits };
+    onChange(index, newSubject);
   }
-    
+
   async function handleDelete() {
     try {
-      await deleteExam(userId, subjectData.subjectName, token); // 토큰 포함
-      onRemove(index); // UI에서도 제거
+      await deleteExam(userId, subjectData.subjectName, token);
+      onRemove(index);
     } catch (err) {
       alert(`시험 삭제 실패: ${err.message}`);
     }
   }
 
   async function handleConfirm() {
-    let examData;
-    
     try {
       const chapters = subjectData.units.map(unit => ({
         chapterTitle: unit.unitName,
         contentVolume: unit.studyAmount,
-        difficulty: unit.difficulty, // ✅ 문자열 그대로 저장
+        difficulty: unit.difficulty,
       }));
 
       const examData = {
@@ -63,15 +64,12 @@
       };
 
       console.log('✅ examData to send:', examData);
-
       await createExam(examData, token);
       alert('✅ 시험 등록 완료!');
     } catch (err) {
       alert(`시험 등록 실패: ${err.message}`);
     }
-
   }
-
 </script>
 
 <div class="subject-card">
