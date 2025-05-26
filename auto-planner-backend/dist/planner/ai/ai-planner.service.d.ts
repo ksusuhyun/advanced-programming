@@ -10,7 +10,6 @@ export declare class AiPlannerService {
     private readonly notionService;
     constructor(configService: ConfigService, userPreferenceService: UserPreferenceService, examService: ExamService, notionService: NotionService);
     generateStudyPlan(userId: string): Promise<SyncToNotionDto[]>;
-    private getStudyDatesBySubject;
     private estimateDaysByDifficulty;
     private assignChaptersSmartMulti;
     private mapResponseForClient;

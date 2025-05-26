@@ -15,6 +15,7 @@ const config_1 = require("@nestjs/config");
 const user_preference_service_1 = require("../../user-preference/user-preference.service");
 const exam_service_1 = require("../../exam/exam.service");
 const notion_service_1 = require("../../notion/notion.service");
+const date_utils_1 = require("./utils/date-utils");
 const date_fns_1 = require("date-fns");
 let AiPlannerService = class AiPlannerService {
     configService;
@@ -39,31 +40,18 @@ let AiPlannerService = class AiPlannerService {
             throw new common_1.InternalServerErrorException('❌ DATABASE_ID 누락');
         const mergedSubjects = this.mergeSubjects(exams);
         const estimates = this.estimateDaysByDifficulty(mergedSubjects);
-        const subjectDateMap = this.getStudyDatesBySubject(mergedSubjects, preference.studyDays);
-        const rawPlans = this.assignChaptersSmartMulti(estimates, mergedSubjects, subjectDateMap, preference.sessionsPerDay);
+        let studyDates = (0, date_utils_1.getAllStudyDates)(mergedSubjects, preference.studyDays);
+        const latestEndDate = Math.max(...mergedSubjects.map(s => new Date(s.endDate).getTime()));
+        studyDates = studyDates.filter(dateStr => {
+            const date = new Date(dateStr);
+            return date.getTime() < latestEndDate;
+        });
+        const rawPlans = this.assignChaptersSmartMulti(estimates, mergedSubjects, studyDates, preference.sessionsPerDay);
         const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
         for (const result of results) {
             await this.notionService.syncToNotion(result);
         }
         return this.mapResponseForClient(results);
-    }
-    getStudyDatesBySubject(subjects, studyDays) {
-        const dayMap = {
-            '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6,
-        };
-        const allowedDays = studyDays.map(day => dayMap[day]);
-        const subjectDateMap = {};
-        for (const subj of subjects) {
-            const interval = (0, date_fns_1.eachDayOfInterval)({
-                start: new Date(subj.startDate),
-                end: new Date(subj.endDate),
-            });
-            const validDates = interval
-                .filter(d => allowedDays.includes(d.getDay()))
-                .map(d => (0, date_fns_1.format)(d, 'yyyy-MM-dd'));
-            subjectDateMap[subj.subject] = validDates;
-        }
-        return subjectDateMap;
     }
     estimateDaysByDifficulty(subjects) {
         const diffWeight = { 1: 0.7, 2: 0.85, 3: 1.0, 4: 1.2, 5: 1.5 };
@@ -82,26 +70,33 @@ let AiPlannerService = class AiPlannerService {
         }
         return result;
     }
-    assignChaptersSmartMulti(chapters, subjects, subjectDateMap, maxPerDay) {
+    assignChaptersSmartMulti(chapters, subjects, dates, maxPerDay) {
         const plans = [];
+        const finalReviewDates = {};
+        const activeDates = [];
+        for (const subj of subjects) {
+            const end = new Date(subj.endDate);
+            const d1 = new Date(end);
+            const d2 = new Date(end);
+            d1.setDate(d1.getDate() - 1);
+            d2.setDate(d2.getDate() - 2);
+            finalReviewDates[subj.subject] = [(0, date_fns_1.format)(d2, 'yyyy-MM-dd'), (0, date_fns_1.format)(d1, 'yyyy-MM-dd')];
+        }
+        const filteredDates = dates.filter(date => !Object.values(finalReviewDates).flat().includes(date));
+        const schedule = {};
+        for (const date of filteredDates) {
+            schedule[date] = { slots: 0, plans: [] };
+        }
         const sortedChapters = [...chapters].sort((a, b) => {
             const impA = subjects.find(s => s.subject === a.subject)?.importance ?? 1;
             const impB = subjects.find(s => s.subject === b.subject)?.importance ?? 1;
             return impB - impA || b.contentVolume - a.contentVolume;
         });
-        const schedule = {};
-        for (const dates of Object.values(subjectDateMap)) {
-            for (const date of dates) {
-                if (!schedule[date])
-                    schedule[date] = { slots: 0, plans: [] };
-            }
-        }
         for (const chapter of sortedChapters) {
-            const availableDates = subjectDateMap[chapter.subject];
             let remaining = chapter.contentVolume;
             const pagesPerDay = Math.max(1, Math.ceil(chapter.contentVolume / chapter.estimatedDays));
             let pageStart = 1;
-            for (const date of availableDates) {
+            for (const date of filteredDates) {
                 if (remaining <= 0)
                     break;
                 const availableSlots = maxPerDay - schedule[date].slots;
@@ -117,32 +112,25 @@ let AiPlannerService = class AiPlannerService {
                 }
             }
             if (remaining > 0 && remaining <= pagesPerDay) {
-                for (const date of availableDates) {
+                for (const date of filteredDates) {
                     const pageEnd = pageStart + remaining - 1;
                     const content = `${chapter.title} (p.${pageStart}-${pageEnd})`;
                     schedule[date].plans.push({ subject: chapter.subject, content });
-                    console.warn(`⚠️ 강제 삽입: ${chapter.title} (p.${pageStart}-${pageEnd})`);
-                    remaining = 0;
                     break;
                 }
-            }
-            if (remaining > 0) {
-                console.warn(`❗ 최종 분배 실패: ${chapter.title} - ${remaining}p`);
+                remaining = 0;
             }
         }
         for (const subject of subjects) {
-            const chapterTitles = subject.chapters.map(c => c.chapterTitle);
-            const validDates = subjectDateMap[subject.subject];
-            for (let i = 0; i < validDates.length; i++) {
-                const date = validDates[i];
-                const hasPlan = schedule[date]?.plans.some(p => p.subject === subject.subject);
-                if (!hasPlan) {
-                    const reviewTarget = chapterTitles[i % chapterTitles.length] || '전체 복습';
-                    plans.push({ subject: subject.subject, date, content: `복습: ${reviewTarget}` });
-                }
+            for (const date of finalReviewDates[subject.subject]) {
+                plans.push({
+                    subject: subject.subject,
+                    date,
+                    content: `복습: 전체 요약 (${subject.subject})`,
+                });
             }
         }
-        for (const date of Object.keys(schedule)) {
+        for (const date of filteredDates) {
             for (const item of schedule[date].plans) {
                 plans.push({ subject: item.subject, date, content: item.content });
             }

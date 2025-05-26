@@ -25,7 +25,7 @@ async function bootstrap() {
         .build();
     const document = swagger_1.SwaggerModule.createDocument(app, config);
     swagger_1.SwaggerModule.setup('api', app, document);
-    (0, notion_token_store_1.saveToken)('202255150', 'ntn_...');
+    (0, notion_token_store_1.saveToken)('202255150', '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');
     await app.listen(process.env.PORT || 4523, '0.0.0.0');
 }
 bootstrap();
