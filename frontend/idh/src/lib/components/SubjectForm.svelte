@@ -74,9 +74,10 @@
     </button>
   </div>
 
-  <button type="button" on:click={() => onRemove(index)} class="add-subject-btn">
-    ❌ 과목 삭제
-  </button>
+  <div class="button-group">
+    <button type="button" on:click={() => onRemove(index)} class="delete-btn">❌ 과목 삭제</button>
+    <button type="button" on:click={handleConfirm} class="confirm-btn">✅ 확인</button>
+  </div>
 </div>
 
 
@@ -283,4 +284,26 @@
     text-align: center;
     font-weight: 400;
   }
+
+  .button-group {
+    display: flex;
+    gap: 16px;
+  }
+
+  .delete-btn,
+  .confirm-btn {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    padding: 12px;
+    height: 50px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background-color: #ffffff;
+    color: #374151;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+
+
 </style> 
