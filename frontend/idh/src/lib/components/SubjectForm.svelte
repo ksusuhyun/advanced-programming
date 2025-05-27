@@ -50,7 +50,7 @@
     try {
       const chapters = subjectData.units.map(unit => ({
         chapterTitle: unit.unitName,
-        contentVolume: unit.studyAmount,
+        contentVolume: Number(unit.studyAmount),
         difficulty: unit.difficulty,
       }));
 
