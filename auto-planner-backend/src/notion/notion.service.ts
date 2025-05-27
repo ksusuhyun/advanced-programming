@@ -327,6 +327,38 @@ export class NotionService {
       },
     });
   }
+
+//   async deleteByUserAndDatabase(userId: string, databaseId: string): Promise<void> {
+//   // 이 부분은 실제 Notion API로 구현 필요
+//   // 예: Notion DB에서 userId가 같은 row를 쿼리 후 삭제
+//   const pages = await this.queryPagesByUser(userId, databaseId);
+
+//   for (const page of pages) {
+//     await this.deletePageById(page.id);
+//   }
+// }
+//   async queryPagesByUser(userId: string, databaseId: string): Promise<{ id: string }[]> {
+//     // 필터: databaseId에서 userId property가 일치하는 row 찾기
+//     const response = await this.notionClient.databases.query({
+//       database_id: databaseId,
+//       filter: {
+//         property: 'userId',
+//         rich_text: {
+//           equals: userId,
+//         },
+//       },
+//     });
+
+//     return response.results.map((r: any) => ({ id: r.id }));
+//   }
+
+//   async deletePageById(pageId: string): Promise<void> {
+//     await this.notionClient.pages.update({
+//       page_id: pageId,
+//       archived: true,
+//     });
+// }
+
 }
 
 

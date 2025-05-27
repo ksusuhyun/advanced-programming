@@ -9,7 +9,7 @@ import { eachDayOfInterval, format, subDays } from 'date-fns';
 interface Chapter {
   chapterTitle: string;
   contentVolume: number;
-  difficulty: number;
+  difficulty: '쉬움' | '보통' | '어려움';
 }
 
 interface Subject {
@@ -25,7 +25,8 @@ interface EstimatedChapter {
   title: string;
   contentVolume: number;
   estimatedDays: number;
-  difficulty: number;
+  difficulty: '쉬움' | '보통' | '어려움';
+  weight: number;
 }
 
 @Injectable()
@@ -44,11 +45,10 @@ export class AiPlannerService {
     if (!preference || !exams || !databaseId) {
       throw new InternalServerErrorException('❌ 아직 필요한 데이터 남아있음');
     }
-
     const mergedSubjects = this.mergeSubjects(exams);
     const estimates = this.estimateDaysByDifficulty(mergedSubjects);
     const subjectDateMap = this.getStudyDatesBySubject(mergedSubjects, preference.studyDays);
-    const rawPlans = this.assignChaptersSmartMulti(estimates, mergedSubjects, subjectDateMap, preference.sessionsPerDay);
+    const rawPlans = this.assignChaptersSmart(estimates, mergedSubjects, subjectDateMap, preference.sessionsPerDay, preference.style as 'focus' | 'multi');
     const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
 
     for (const result of results) {
@@ -86,102 +86,138 @@ export class AiPlannerService {
     }
     return subjectDateMap;
   }
+  // 클래스 내부 메서드로 선언
+  private mergePageRanges(ranges: number[][]): number[][] {
+    const sorted = ranges.sort((a, b) => a[0] - b[0]);
+    const merged: number[][] = [];
+
+    for (const [start, end] of sorted) {
+      if (merged.length === 0 || merged[merged.length - 1][1] < start - 1) {
+        merged.push([start, end]);
+      } else {
+        merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], end);
+      }
+    }
+
+    return merged;
+  }
 
   private estimateDaysByDifficulty(subjects: Subject[]): EstimatedChapter[] {
-    const diffWeight = { 1: 0.7, 2: 0.85, 3: 1.0, 4: 1.2, 5: 1.5 };
+    const diffWeight: Record<string, number> = {
+      '쉬움': 0.7,
+      '보통': 1.0,
+      '어려움': 1.5,
+    };
+
     const result: EstimatedChapter[] = [];
 
     for (const subject of subjects) {
       for (const chapter of subject.chapters) {
-        const factor = diffWeight[chapter.difficulty] || 1.0;
-        const days = Math.ceil((chapter.contentVolume * factor) / 10);
+        const baseWeight = chapter.contentVolume * (diffWeight[chapter.difficulty] || 1.0);
+        const importanceFactor = 1 + subject.importance * 0.05;
+        const weight = baseWeight * importanceFactor;
+
         result.push({
           subject: subject.subject,
           title: chapter.chapterTitle,
           contentVolume: chapter.contentVolume,
-          estimatedDays: days,
+          estimatedDays: 0,
           difficulty: chapter.difficulty,
+          weight,
         });
       }
     }
     return result;
   }
 
-  private assignChaptersSmartMulti(
+
+
+  private assignChaptersSmart(
     chapters: EstimatedChapter[],
     subjects: Subject[],
     subjectDateMap: Record<string, string[]>,
-    maxPerDay: number
+    sessionsPerDay: number,
+    style: 'focus' | 'multi'
   ): { subject: string; date: string; content: string }[] {
     const plans: { subject: string; date: string; content: string }[] = [];
-    const sortedChapters = [...chapters].sort((a, b) => {
-      const impA = subjects.find(s => s.subject === a.subject)?.importance ?? 1;
-      const impB = subjects.find(s => s.subject === b.subject)?.importance ?? 1;
-      return impB - impA || b.contentVolume - a.contentVolume;
-    });
+    const calendar: Record<string, string> = {};
+    const sessionPlan: Record<string, number> = {}; // date → 현재 세션 수
 
     for (const subject of subjects) {
-      const dates = [...subjectDateMap[subject.subject]];
+      const dates = subjectDateMap[subject.subject];
       const endDate = dates[dates.length - 1];
       const reservedDates = new Set([
         format(subDays(new Date(endDate), 1), 'yyyy-MM-dd'),
         format(subDays(new Date(endDate), 2), 'yyyy-MM-dd'),
         endDate,
       ]);
-      const usableDates = dates.filter(d => !reservedDates.has(d));
+      const availableDates = dates.filter(d => !reservedDates.has(d));
 
-      // ✅ Sort chapters in declared order, NOT importance
-      const chaptersForSubject = subject.chapters.map(ch =>
-        sortedChapters.find(c => c.subject === subject.subject && c.title === ch.chapterTitle)!
-      );
+      const subjectChapters = chapters.filter(c => c.subject === subject.subject);
+      const totalWeight = subjectChapters.reduce((sum, ch) => sum + ch.weight, 0);
+      const totalSessions = availableDates.length * sessionsPerDay;
+
       let dateIdx = 0;
+      for (const ch of subjectChapters) {
+        let remaining = ch.contentVolume;
+        let currentPage = 1;
 
-      const dailyChapterMap: Record<string, Record<string, { start: number; end: number }>> = {};
+        while (remaining > 0 && dateIdx < availableDates.length) {
+          const date = availableDates[dateIdx];
 
-      for (const chapter of chaptersForSubject) {
-        let remaining = chapter.contentVolume;
-        const pagesPerDay = Math.max(1, Math.ceil(chapter.contentVolume / chapter.estimatedDays));
-        let pageStart = 1;
-
-        while (remaining > 0 && dateIdx < usableDates.length) {
-          const date = usableDates[dateIdx];
-          for (let s = 0; s < maxPerDay && remaining > 0; s++) {
-            const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
-            if (!dailyChapterMap[date]) dailyChapterMap[date] = {};
-            if (!dailyChapterMap[date][chapter.title]) {
-              dailyChapterMap[date][chapter.title] = { start: pageStart, end: pageEnd };
-            } else {
-              dailyChapterMap[date][chapter.title].end = pageEnd;
-            }
-            remaining -= (pageEnd - pageStart + 1);
-            pageStart = pageEnd + 1;
+          if (style === 'focus' && calendar[date] && calendar[date] !== subject.subject) {
+            dateIdx++;
+            continue;
           }
-          dateIdx++;
+
+          const usedSessions = sessionPlan[date] || 0;
+          if (usedSessions >= sessionsPerDay) {
+            dateIdx++;
+            continue;
+          }
+
+          const sessionSize = Math.min(remaining, Math.ceil(ch.weight / totalWeight * totalSessions)); // adaptive
+          const pageEnd = Math.min(currentPage + sessionSize - 1, ch.contentVolume);
+
+          plans.push({
+            subject: subject.subject,
+            date,
+            content: `${ch.title} (p.${currentPage}-${pageEnd})`,
+          });
+
+          calendar[date] = subject.subject;
+          sessionPlan[date] = usedSessions + 1;
+
+          const consumed = pageEnd - currentPage + 1;
+          remaining -= consumed;
+          currentPage = pageEnd + 1;
         }
       }
 
-      for (const [date, chapterMap] of Object.entries(dailyChapterMap)) {
-        for (const [title, { start, end }] of Object.entries(chapterMap)) {
-          plans.push({ subject: subject.subject, date, content: `${title} (p.${start}-${end})` });
-        }
-      }
+      // 남은 날짜에 복습 추가
+      const assignedDates = new Set(plans.filter(p => p.subject === subject.subject).map(p => p.date));
+      const remainingDates = availableDates.filter(d => !assignedDates.has(d));
+      const sortedChapters = [...subjectChapters].sort((a, b) =>
+        this.difficultyRank(b.difficulty) - this.difficultyRank(a.difficulty)
+      );
 
-      const usedDates = plans.filter(p => p.subject === subject.subject).map(p => p.date);
-      const remainingDates = usableDates.filter(d => !usedDates.includes(d));
-      const highPriorityChapters = [...subject.chapters].sort((a, b) => b.difficulty - a.difficulty);
-      let rIdx = 0;
-
+      let ri = 0;
       for (const date of remainingDates) {
-        const reviewChapter = highPriorityChapters[rIdx % highPriorityChapters.length];
-        plans.push({ subject: subject.subject, date, content: `복습: ${reviewChapter.chapterTitle}` });
-        rIdx++;
+        const ch = sortedChapters[ri % sortedChapters.length];
+        plans.push({ subject: subject.subject, date, content: `복습: ${ch.title}` });
+        ri++;
       }
     }
-
 
     plans.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     return plans;
   }
+
+  private difficultyRank(diff: '쉬움' | '보통' | '어려움'): number {
+  return { '쉬움': 1, '보통': 2, '어려움': 3 }[diff] || 2;
+}
+
+
 
   private mapResponseForClient(results: SyncToNotionDto[]): any[] {
     return results.map(({ subject, startDate, endDate, dailyPlan, userId, databaseId }) => ({
@@ -202,25 +238,56 @@ export class AiPlannerService {
   ): SyncToNotionDto[] {
     const groupedBySubject: Record<string, SyncToNotionDto> = {};
 
+    // 중복 챕터 범위 통합을 위한 임시 구조: {subject -> date -> chapterTitle -> [pageRange]}
+    const pageMap: Record<string, Record<string, Record<string, number[][]>>> = {};
+
     for (const item of rawPlans) {
       const subjectKey = item.subject;
-      if (!groupedBySubject[subjectKey]) {
-        const matched = subjects.find(s => s.subject === subjectKey);
-        if (!matched) throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
-        groupedBySubject[subjectKey] = {
-          userId,
-          subject: subjectKey,
-          startDate: format(new Date(matched.startDate), 'yyyy-MM-dd'),
-          endDate: format(new Date(matched.endDate), 'yyyy-MM-dd'),
-          dailyPlan: [],
-          databaseId,
-        };
-      }
-
-      const dailyPlan = groupedBySubject[subjectKey].dailyPlan;
       const date = item.date;
-      const fullContent = item.content;
-      dailyPlan.push(`${date}: ${fullContent}`);
+
+      // 챕터 제목과 페이지 추출
+      const match = item.content.match(/^(.*) \(p\.(\d+)-(\d+)\)$/);
+      if (!match) continue; // 복습일 경우 등은 통합 X
+      const [_, chapterTitle, start, end] = match;
+      const pStart = parseInt(start, 10);
+      const pEnd = parseInt(end, 10);
+
+      // init
+      pageMap[subjectKey] ??= {};
+      pageMap[subjectKey][date] ??= {};
+      pageMap[subjectKey][date][chapterTitle] ??= [];
+      pageMap[subjectKey][date][chapterTitle].push([pStart, pEnd]);
+    }
+
+    // 통합된 content 구성
+    for (const subjectKey of Object.keys(pageMap)) {
+      const matched = subjects.find(s => s.subject === subjectKey);
+      if (!matched) throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
+      groupedBySubject[subjectKey] = {
+        userId,
+        subject: subjectKey,
+        startDate: format(new Date(matched.startDate), 'yyyy-MM-dd'),
+        endDate: format(new Date(matched.endDate), 'yyyy-MM-dd'),
+        dailyPlan: [],
+        databaseId,
+      };
+
+      const dateMap = pageMap[subjectKey];
+      for (const date of Object.keys(dateMap).sort()) {
+        const chapterContents: string[] = [];
+
+        for (const chapterTitle of Object.keys(dateMap[date])) {
+          const ranges = dateMap[date][chapterTitle];
+          const merged = this.mergePageRanges(ranges);
+          for (const [s, e] of merged) {
+            chapterContents.push(`${chapterTitle} (p.${s}-${e})`);
+          }
+        }
+
+        if (chapterContents.length > 0) {
+          groupedBySubject[subjectKey].dailyPlan.push(`${date}: ${chapterContents.join(', ')}`);
+        }
+      }
     }
 
     return Object.values(groupedBySubject);
@@ -249,3 +316,4 @@ export class AiPlannerService {
     return Object.values(grouped);
   }
 }
+
