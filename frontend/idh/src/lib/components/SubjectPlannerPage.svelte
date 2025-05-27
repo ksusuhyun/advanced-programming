@@ -13,7 +13,7 @@
       startDate: '',
       endDate: '',
       importance: 3,
-      units: [{ unitName: '', studyAmount: '', difficulty: '선택' }]
+      units: [{ unitName: '', studyAmount: '', difficulty: '난이도 선택' }]
     }
   ];
 
