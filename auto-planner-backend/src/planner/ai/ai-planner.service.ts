@@ -9,7 +9,7 @@ import { eachDayOfInterval, format, subDays } from 'date-fns';
 interface Chapter {
   chapterTitle: string;
   contentVolume: number;
-  difficulty: number;
+  difficulty: '쉬움' | '보통' | '어려움';
 }
 
 interface Subject {
@@ -25,7 +25,7 @@ interface EstimatedChapter {
   title: string;
   contentVolume: number;
   estimatedDays: number;
-  difficulty: number;
+  difficulty: '쉬움' | '보통' | '어려움';
   weight: number;
 }
 
@@ -87,20 +87,42 @@ export class AiPlannerService {
     }
     return subjectDateMap;
   }
+  // 클래스 내부 메서드로 선언
+  private mergePageRanges(ranges: number[][]): number[][] {
+    const sorted = ranges.sort((a, b) => a[0] - b[0]);
+    const merged: number[][] = [];
+
+    for (const [start, end] of sorted) {
+      if (merged.length === 0 || merged[merged.length - 1][1] < start - 1) {
+        merged.push([start, end]);
+      } else {
+        merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], end);
+      }
+    }
+
+    return merged;
+  }
 
   private estimateDaysByDifficulty(subjects: Subject[]): EstimatedChapter[] {
-    const diffWeight = { 1: 0.7, 2: 0.85, 3: 1.0, 4: 1.4, 5: 1.8 };
+    const diffWeight: Record<string, number> = {
+      '쉬움': 0.7,
+      '보통': 1.0,
+      '어려움': 1.5,
+    };
+
     const result: EstimatedChapter[] = [];
 
     for (const subject of subjects) {
       for (const chapter of subject.chapters) {
-        const weight = chapter.contentVolume * (diffWeight[chapter.difficulty] || 1.0);
-        const days = Math.ceil(weight / 10);
+        const baseWeight = chapter.contentVolume * (diffWeight[chapter.difficulty] || 1.0);
+        const importanceFactor = 1 + subject.importance * 0.05;
+        const weight = baseWeight * importanceFactor;
+
         result.push({
           subject: subject.subject,
           title: chapter.chapterTitle,
           contentVolume: chapter.contentVolume,
-          estimatedDays: days,
+          estimatedDays: 0,
           difficulty: chapter.difficulty,
           weight,
         });
@@ -108,6 +130,8 @@ export class AiPlannerService {
     }
     return result;
   }
+
+
 
   private assignChaptersSmart(
     chapters: EstimatedChapter[],
@@ -117,85 +141,83 @@ export class AiPlannerService {
     style: 'focus' | 'multi'
   ): { subject: string; date: string; content: string }[] {
     const plans: { subject: string; date: string; content: string }[] = [];
+    const calendar: Record<string, string> = {};
 
-    if (style === 'focus') {
-      for (const subject of subjects) {
-        const dates = subjectDateMap[subject.subject];
-        const endDate = dates[dates.length - 1];
-        const reservedDates = new Set([
-          format(subDays(new Date(endDate), 1), 'yyyy-MM-dd'),
-          format(subDays(new Date(endDate), 2), 'yyyy-MM-dd'),
-          endDate,
-        ]);
-        const availableDates = dates.filter(d => !reservedDates.has(d));
+    for (const subject of subjects) {
+      const dates = subjectDateMap[subject.subject];
+      const endDate = dates[dates.length - 1];
+      const reservedDates = new Set([
+        format(subDays(new Date(endDate), 1), 'yyyy-MM-dd'),
+        format(subDays(new Date(endDate), 2), 'yyyy-MM-dd'),
+        endDate,
+      ]);
+      const availableDates = dates.filter(d => !reservedDates.has(d));
 
-        const subjectChapters = chapters.filter(c => c.subject === subject.subject);
-        const totalWeight = subjectChapters.reduce((sum, ch) => sum + ch.weight, 0);
+      const subjectChapters = chapters.filter(c => c.subject === subject.subject);
+      const totalWeight = subjectChapters.reduce((sum, ch) => sum + ch.weight, 0);
+      const totalSessions = availableDates.length * sessionsPerDay;
+      const weightPerSession = totalWeight / totalSessions;
 
-        const daySlices: Record<string, number> = {};
-        for (const ch of subjectChapters) {
-          const ratio = ch.weight / totalWeight;
-          daySlices[ch.title] = Math.max(1, Math.round(ratio * availableDates.length));
-        }
+      const sessionPlan: Record<string, number> = {}; // date → 현재 세션 수
+      let dateIdx = 0;
 
-        let dateIdx = 0;
-        for (const ch of subjectChapters) {
-          const sliceDays = daySlices[ch.title];
-          const pagesPerDay = Math.ceil(ch.contentVolume / sliceDays);
-          let pageStart = 1;
-          for (let i = 0; i < sliceDays; i++) {
-            if (dateIdx >= availableDates.length) break;
-            const date = availableDates[dateIdx++];
-            const pageEnd = Math.min(ch.contentVolume, pageStart + pagesPerDay - 1);
-            plans.push({ subject: subject.subject, date, content: `${ch.title} (p.${pageStart}-${pageEnd})` });
-            pageStart = pageEnd + 1;
+      for (const ch of subjectChapters) {
+        let remainingPages = ch.contentVolume;
+        let currentPage = 1;
+
+        while (remainingPages > 0 && dateIdx < availableDates.length) {
+          const date = availableDates[dateIdx];
+
+          if (style === 'focus' && calendar[date] && calendar[date] !== subject.subject) {
+            dateIdx++;
+            continue;
           }
+
+          const usedSessions = sessionPlan[date] || 0;
+          if (usedSessions >= sessionsPerDay) {
+            dateIdx++;
+            continue;
+          }
+
+          const pagePerSession = Math.max(1, Math.ceil((ch.contentVolume * ch.weight) / totalWeight / totalSessions * ch.contentVolume));
+          const endPage = Math.min(currentPage + pagePerSession - 1, ch.contentVolume);
+          const content = `${ch.title} (p.${currentPage}-${endPage})`;
+
+          plans.push({
+            subject: subject.subject,
+            date,
+            content,
+          });
+
+          calendar[date] = subject.subject;
+          sessionPlan[date] = usedSessions + 1;
+
+          const pagesCovered = endPage - currentPage + 1;
+          currentPage = endPage + 1;
+          remainingPages -= pagesCovered;
         }
       }
-    } else {
-      const calendar: Record<string, { subject: string; content: string }[]> = {};
-      for (const subject of subjects) {
-        const dates = subjectDateMap[subject.subject];
-        const endDate = dates[dates.length - 1];
-        const reservedDates = new Set([
-          format(subDays(new Date(endDate), 1), 'yyyy-MM-dd'),
-          format(subDays(new Date(endDate), 2), 'yyyy-MM-dd'),
-          endDate,
-        ]);
-        const availableDates = dates.filter(d => !reservedDates.has(d));
 
-        const subjectChapters = chapters.filter(c => c.subject === subject.subject);
-        const totalWeight = subjectChapters.reduce((sum, ch) => sum + ch.weight, 0);
-
-        const daySlices: Record<string, number> = {};
-        for (const ch of subjectChapters) {
-          const ratio = ch.weight / totalWeight;
-          daySlices[ch.title] = Math.max(1, Math.round(ratio * availableDates.length));
-        }
-
-        let dateIdx = 0;
-        for (const ch of subjectChapters) {
-          const sliceDays = daySlices[ch.title];
-          const pagesPerDay = Math.ceil(ch.contentVolume / sliceDays);
-          let pageStart = 1;
-          for (let i = 0; i < sliceDays; i++) {
-            if (dateIdx >= availableDates.length) break;
-            const date = availableDates[dateIdx++];
-            const pageEnd = Math.min(ch.contentVolume, pageStart + pagesPerDay - 1);
-            if (!calendar[date]) calendar[date] = [];
-            calendar[date].push({ subject: subject.subject, content: `${ch.title} (p.${pageStart}-${pageEnd})` });
-            pageStart = pageEnd + 1;
-          }
-        }
-      }
-      for (const [date, items] of Object.entries(calendar)) {
-        for (const item of items) plans.push({ ...item, date });
+      // 복습용 일정 추가
+      const assignedDates = new Set(plans.filter(p => p.subject === subject.subject).map(p => p.date));
+      const remainingDates = availableDates.filter(d => !assignedDates.has(d));
+      const difficultyOrder = { '쉬움': 1, '보통': 2, '어려움': 3 };
+      const sortedChapters = [...subjectChapters].sort(
+        (a, b) => difficultyOrder[b.difficulty] - difficultyOrder[a.difficulty]
+      );
+      let ri = 0;
+      for (const date of remainingDates) {
+        const ch = sortedChapters[ri % sortedChapters.length];
+        plans.push({ subject: subject.subject, date, content: `복습: ${ch.title}` });
+        ri++;
       }
     }
 
     plans.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     return plans;
   }
+
+
 
   private mapResponseForClient(results: SyncToNotionDto[]): any[] {
     return results.map(({ subject, startDate, endDate, dailyPlan, userId, databaseId }) => ({
@@ -216,25 +238,56 @@ export class AiPlannerService {
   ): SyncToNotionDto[] {
     const groupedBySubject: Record<string, SyncToNotionDto> = {};
 
+    // 중복 챕터 범위 통합을 위한 임시 구조: {subject -> date -> chapterTitle -> [pageRange]}
+    const pageMap: Record<string, Record<string, Record<string, number[][]>>> = {};
+
     for (const item of rawPlans) {
       const subjectKey = item.subject;
-      if (!groupedBySubject[subjectKey]) {
-        const matched = subjects.find(s => s.subject === subjectKey);
-        if (!matched) throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
-        groupedBySubject[subjectKey] = {
-          userId,
-          subject: subjectKey,
-          startDate: format(new Date(matched.startDate), 'yyyy-MM-dd'),
-          endDate: format(new Date(matched.endDate), 'yyyy-MM-dd'),
-          dailyPlan: [],
-          databaseId,
-        };
-      }
-
-      const dailyPlan = groupedBySubject[subjectKey].dailyPlan;
       const date = item.date;
-      const fullContent = item.content;
-      dailyPlan.push(`${date}: ${fullContent}`);
+
+      // 챕터 제목과 페이지 추출
+      const match = item.content.match(/^(.*) \(p\.(\d+)-(\d+)\)$/);
+      if (!match) continue; // 복습일 경우 등은 통합 X
+      const [_, chapterTitle, start, end] = match;
+      const pStart = parseInt(start, 10);
+      const pEnd = parseInt(end, 10);
+
+      // init
+      pageMap[subjectKey] ??= {};
+      pageMap[subjectKey][date] ??= {};
+      pageMap[subjectKey][date][chapterTitle] ??= [];
+      pageMap[subjectKey][date][chapterTitle].push([pStart, pEnd]);
+    }
+
+    // 통합된 content 구성
+    for (const subjectKey of Object.keys(pageMap)) {
+      const matched = subjects.find(s => s.subject === subjectKey);
+      if (!matched) throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
+      groupedBySubject[subjectKey] = {
+        userId,
+        subject: subjectKey,
+        startDate: format(new Date(matched.startDate), 'yyyy-MM-dd'),
+        endDate: format(new Date(matched.endDate), 'yyyy-MM-dd'),
+        dailyPlan: [],
+        databaseId,
+      };
+
+      const dateMap = pageMap[subjectKey];
+      for (const date of Object.keys(dateMap).sort()) {
+        const chapterContents: string[] = [];
+
+        for (const chapterTitle of Object.keys(dateMap[date])) {
+          const ranges = dateMap[date][chapterTitle];
+          const merged = this.mergePageRanges(ranges);
+          for (const [s, e] of merged) {
+            chapterContents.push(`${chapterTitle} (p.${s}-${e})`);
+          }
+        }
+
+        if (chapterContents.length > 0) {
+          groupedBySubject[subjectKey].dailyPlan.push(`${date}: ${chapterContents.join(', ')}`);
+        }
+      }
     }
 
     return Object.values(groupedBySubject);
@@ -263,3 +316,4 @@ export class AiPlannerService {
     return Object.values(grouped);
   }
 }
+

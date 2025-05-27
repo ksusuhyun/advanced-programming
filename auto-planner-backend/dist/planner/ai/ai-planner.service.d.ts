@@ -11,6 +11,7 @@ export declare class AiPlannerService {
     constructor(configService: ConfigService, userPreferenceService: UserPreferenceService, examService: ExamService, notionService: NotionService);
     generateStudyPlan(userId: string): Promise<SyncToNotionDto[]>;
     private getStudyDatesBySubject;
+    private mergePageRanges;
     private estimateDaysByDifficulty;
     private assignChaptersSmart;
     private mapResponseForClient;
