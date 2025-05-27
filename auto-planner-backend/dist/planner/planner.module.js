@@ -10,7 +10,7 @@ exports.PlannerModule = void 0;
 const common_1 = require("@nestjs/common");
 const planner_controller_1 = require("./planner.controller");
 const planner_service_1 = require("./planner.service");
-const notion_module_1 = require("../notion/notion.module");
+const notion_module_1 = require("src/notion/notion.module");
 let PlannerModule = class PlannerModule {
 };
 exports.PlannerModule = PlannerModule;
