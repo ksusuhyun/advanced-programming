@@ -40,9 +40,12 @@ let AiPlannerService = class AiPlannerService {
         const rawPlans = this.assignChaptersSmartMulti(estimates, mergedSubjects, subjectDateMap, preference.sessionsPerDay);
         const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
         for (const result of results) {
-            const formattedEndDate = (0, date_fns_1.format)(new Date(result.endDate), 'yyyy-MM-dd');
-            const reviewDate = (0, date_fns_1.format)((0, date_fns_1.subDays)(new Date(result.endDate), 1), 'yyyy-MM-dd');
-            result.dailyPlan.push(`${reviewDate}: 복습: 전체 복습`);
+            const end = new Date(result.endDate);
+            const review1 = (0, date_fns_1.format)((0, date_fns_1.subDays)(end, 2), 'yyyy-MM-dd');
+            const review2 = (0, date_fns_1.format)((0, date_fns_1.subDays)(end, 1), 'yyyy-MM-dd');
+            const formattedEndDate = (0, date_fns_1.format)(end, 'yyyy-MM-dd');
+            result.dailyPlan.push(`${review1}: 복습: 전체 챕터 복습`);
+            result.dailyPlan.push(`${review2}: 복습: 전체 챕터 복습`);
             result.dailyPlan.push(`${formattedEndDate}: 📝 시험일: ${result.subject}`);
             await this.notionService.syncToNotion(result);
         }
@@ -76,6 +79,7 @@ let AiPlannerService = class AiPlannerService {
                     title: chapter.chapterTitle,
                     contentVolume: chapter.contentVolume,
                     estimatedDays: days,
+                    difficulty: chapter.difficulty,
                 });
             }
         }
@@ -88,52 +92,53 @@ let AiPlannerService = class AiPlannerService {
             const impB = subjects.find(s => s.subject === b.subject)?.importance ?? 1;
             return impB - impA || b.contentVolume - a.contentVolume;
         });
-        const schedule = {};
-        for (const dates of Object.values(subjectDateMap)) {
-            for (const date of dates) {
-                if (!schedule[date])
-                    schedule[date] = { slots: 0, plans: [] };
-            }
-        }
-        for (const chapter of sortedChapters) {
-            const availableDates = subjectDateMap[chapter.subject];
-            let remaining = chapter.contentVolume;
-            const pagesPerDay = Math.max(1, Math.ceil(chapter.contentVolume / chapter.estimatedDays));
-            let pageStart = 1;
-            for (const date of availableDates) {
-                if (remaining <= 0)
-                    break;
-                const availableSlots = maxPerDay - schedule[date].slots;
-                if (availableSlots <= 0)
-                    continue;
-                for (let s = 0; s < availableSlots && remaining > 0; s++) {
-                    const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
-                    const content = `${chapter.title} (p.${pageStart}-${pageEnd})`;
-                    schedule[date].plans.push({ subject: chapter.subject, content });
-                    schedule[date].slots += 1;
-                    remaining -= (pageEnd - pageStart + 1);
-                    pageStart = pageEnd + 1;
-                }
-            }
-            if (remaining > 0) {
-                console.warn(`❗ 최종 분배 실패: ${chapter.title} - ${remaining}p`);
-            }
-        }
         for (const subject of subjects) {
-            const chapterTitles = subject.chapters.map(c => c.chapterTitle);
-            const validDates = subjectDateMap[subject.subject];
-            for (let i = 0; i < validDates.length; i++) {
-                const date = validDates[i];
-                const hasPlan = schedule[date]?.plans.some(p => p.subject === subject.subject);
-                if (!hasPlan) {
-                    const reviewTarget = chapterTitles[i % chapterTitles.length] || '전체 복습';
-                    plans.push({ subject: subject.subject, date, content: `복습: ${reviewTarget}` });
+            const dates = [...subjectDateMap[subject.subject]];
+            const endDate = dates[dates.length - 1];
+            const reservedDates = new Set([
+                (0, date_fns_1.format)((0, date_fns_1.subDays)(new Date(endDate), 1), 'yyyy-MM-dd'),
+                (0, date_fns_1.format)((0, date_fns_1.subDays)(new Date(endDate), 2), 'yyyy-MM-dd'),
+                endDate,
+            ]);
+            const usableDates = dates.filter(d => !reservedDates.has(d));
+            const chaptersForSubject = subject.chapters.map(ch => sortedChapters.find(c => c.subject === subject.subject && c.title === ch.chapterTitle));
+            let dateIdx = 0;
+            const dailyChapterMap = {};
+            for (const chapter of chaptersForSubject) {
+                let remaining = chapter.contentVolume;
+                const pagesPerDay = Math.max(1, Math.ceil(chapter.contentVolume / chapter.estimatedDays));
+                let pageStart = 1;
+                while (remaining > 0 && dateIdx < usableDates.length) {
+                    const date = usableDates[dateIdx];
+                    for (let s = 0; s < maxPerDay && remaining > 0; s++) {
+                        const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
+                        if (!dailyChapterMap[date])
+                            dailyChapterMap[date] = {};
+                        if (!dailyChapterMap[date][chapter.title]) {
+                            dailyChapterMap[date][chapter.title] = { start: pageStart, end: pageEnd };
+                        }
+                        else {
+                            dailyChapterMap[date][chapter.title].end = pageEnd;
+                        }
+                        remaining -= (pageEnd - pageStart + 1);
+                        pageStart = pageEnd + 1;
+                    }
+                    dateIdx++;
                 }
             }
-        }
-        for (const date of Object.keys(schedule)) {
-            for (const item of schedule[date].plans) {
-                plans.push({ subject: item.subject, date, content: item.content });
+            for (const [date, chapterMap] of Object.entries(dailyChapterMap)) {
+                for (const [title, { start, end }] of Object.entries(chapterMap)) {
+                    plans.push({ subject: subject.subject, date, content: `${title} (p.${start}-${end})` });
+                }
+            }
+            const usedDates = plans.filter(p => p.subject === subject.subject).map(p => p.date);
+            const remainingDates = usableDates.filter(d => !usedDates.includes(d));
+            const highPriorityChapters = [...subject.chapters].sort((a, b) => b.difficulty - a.difficulty);
+            let rIdx = 0;
+            for (const date of remainingDates) {
+                const reviewChapter = highPriorityChapters[rIdx % highPriorityChapters.length];
+                plans.push({ subject: subject.subject, date, content: `복습: ${reviewChapter.chapterTitle}` });
+                rIdx++;
             }
         }
         plans.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -169,21 +174,7 @@ let AiPlannerService = class AiPlannerService {
             const dailyPlan = groupedBySubject[subjectKey].dailyPlan;
             const date = item.date;
             const fullContent = item.content;
-            const chapterTitle = fullContent.split(' (')[0];
-            const pageRange = fullContent.match(/\(p\.(\d+)-(\d+)\)/);
-            const existingIdx = dailyPlan.findIndex(entry => entry.startsWith(`${date}: ${chapterTitle}`));
-            if (existingIdx !== -1 && pageRange) {
-                const existing = dailyPlan[existingIdx];
-                const existingPage = existing.match(/\(p\.(\d+)-(\d+)\)/);
-                if (existingPage) {
-                    const minPage = Math.min(Number(existingPage[1]), Number(pageRange[1]));
-                    const maxPage = Math.max(Number(existingPage[2]), Number(pageRange[2]));
-                    dailyPlan[existingIdx] = `${date}: ${chapterTitle} (p.${minPage}-${maxPage})`;
-                }
-            }
-            else {
-                dailyPlan.push(`${date}: ${fullContent}`);
-            }
+            dailyPlan.push(`${date}: ${fullContent}`);
         }
         return Object.values(groupedBySubject);
     }
