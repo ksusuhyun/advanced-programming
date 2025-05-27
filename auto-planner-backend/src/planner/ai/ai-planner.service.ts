@@ -45,7 +45,6 @@ export class AiPlannerService {
     if (!preference || !exams || !databaseId) {
       throw new InternalServerErrorException('❌ 아직 필요한 데이터 남아있음');
     }
-
     const mergedSubjects = this.mergeSubjects(exams);
     const estimates = this.estimateDaysByDifficulty(mergedSubjects);
     const subjectDateMap = this.getStudyDatesBySubject(mergedSubjects, preference.studyDays);
@@ -179,23 +178,25 @@ export class AiPlannerService {
             continue;
           }
 
-          const pagePerSession = Math.max(1, Math.ceil((ch.contentVolume * ch.weight) / totalWeight / totalSessions * ch.contentVolume));
-          const endPage = Math.min(currentPage + pagePerSession - 1, ch.contentVolume);
-          const content = `${ch.title} (p.${currentPage}-${endPage})`;
+          const pagePerSession = Math.min(remainingPages, Math.ceil((ch.weight / totalWeight) * totalSessions));
+          const pageEnd = Math.min(currentPage + pagePerSession - 1, ch.contentVolume);
 
           plans.push({
             subject: subject.subject,
             date,
-            content,
+            content: `${ch.title} (p.${currentPage}-${pageEnd})`,
           });
 
           calendar[date] = subject.subject;
           sessionPlan[date] = usedSessions + 1;
 
-          const pagesCovered = endPage - currentPage + 1;
-          currentPage = endPage + 1;
-          remainingPages -= pagesCovered;
+          const pagesThisSession = pageEnd - currentPage + 1;
+          currentPage = pageEnd + 1;
+          remainingPages -= pagesThisSession;
+
+          if (remainingPages <= 0) break;
         }
+
       }
 
       // 복습용 일정 추가
