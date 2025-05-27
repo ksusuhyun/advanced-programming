@@ -44,7 +44,7 @@ model Chapter {
   examId        Int
   chapterTitle  String
   difficulty    String
-  contentVolume Int
+  contentVolume Int @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   exam          Exam     @relation(fields: [examId], references: [id])
