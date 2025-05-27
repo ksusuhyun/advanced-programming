@@ -12,7 +12,7 @@ export declare class AiPlannerService {
     generateStudyPlan(userId: string): Promise<SyncToNotionDto[]>;
     private getStudyDatesBySubject;
     private estimateDaysByDifficulty;
-    private assignChaptersSmartMulti;
+    private assignChaptersSmart;
     private mapResponseForClient;
     private groupDailyPlansBySubject;
     private mergeSubjects;

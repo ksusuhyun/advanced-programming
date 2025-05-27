@@ -26,6 +26,7 @@ interface EstimatedChapter {
   contentVolume: number;
   estimatedDays: number;
   difficulty: number;
+  weight: number;
 }
 
 @Injectable()
@@ -48,7 +49,7 @@ export class AiPlannerService {
     const mergedSubjects = this.mergeSubjects(exams);
     const estimates = this.estimateDaysByDifficulty(mergedSubjects);
     const subjectDateMap = this.getStudyDatesBySubject(mergedSubjects, preference.studyDays);
-    const rawPlans = this.assignChaptersSmartMulti(estimates, mergedSubjects, subjectDateMap, preference.sessionsPerDay);
+    const rawPlans = this.assignChaptersSmart(estimates, mergedSubjects, subjectDateMap, preference.sessionsPerDay, preference.style as 'focus' | 'multi');
     const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
 
     for (const result of results) {
@@ -88,96 +89,109 @@ export class AiPlannerService {
   }
 
   private estimateDaysByDifficulty(subjects: Subject[]): EstimatedChapter[] {
-    const diffWeight = { 1: 0.7, 2: 0.85, 3: 1.0, 4: 1.2, 5: 1.5 };
+    const diffWeight = { 1: 0.7, 2: 0.85, 3: 1.0, 4: 1.4, 5: 1.8 };
     const result: EstimatedChapter[] = [];
 
     for (const subject of subjects) {
       for (const chapter of subject.chapters) {
-        const factor = diffWeight[chapter.difficulty] || 1.0;
-        const days = Math.ceil((chapter.contentVolume * factor) / 10);
+        const weight = chapter.contentVolume * (diffWeight[chapter.difficulty] || 1.0);
+        const days = Math.ceil(weight / 10);
         result.push({
           subject: subject.subject,
           title: chapter.chapterTitle,
           contentVolume: chapter.contentVolume,
           estimatedDays: days,
           difficulty: chapter.difficulty,
+          weight,
         });
       }
     }
     return result;
   }
 
-  private assignChaptersSmartMulti(
+  private assignChaptersSmart(
     chapters: EstimatedChapter[],
     subjects: Subject[],
     subjectDateMap: Record<string, string[]>,
-    maxPerDay: number
+    sessionsPerDay: number,
+    style: 'focus' | 'multi'
   ): { subject: string; date: string; content: string }[] {
     const plans: { subject: string; date: string; content: string }[] = [];
-    const sortedChapters = [...chapters].sort((a, b) => {
-      const impA = subjects.find(s => s.subject === a.subject)?.importance ?? 1;
-      const impB = subjects.find(s => s.subject === b.subject)?.importance ?? 1;
-      return impB - impA || b.contentVolume - a.contentVolume;
-    });
 
-    for (const subject of subjects) {
-      const dates = [...subjectDateMap[subject.subject]];
-      const endDate = dates[dates.length - 1];
-      const reservedDates = new Set([
-        format(subDays(new Date(endDate), 1), 'yyyy-MM-dd'),
-        format(subDays(new Date(endDate), 2), 'yyyy-MM-dd'),
-        endDate,
-      ]);
-      const usableDates = dates.filter(d => !reservedDates.has(d));
+    if (style === 'focus') {
+      for (const subject of subjects) {
+        const dates = subjectDateMap[subject.subject];
+        const endDate = dates[dates.length - 1];
+        const reservedDates = new Set([
+          format(subDays(new Date(endDate), 1), 'yyyy-MM-dd'),
+          format(subDays(new Date(endDate), 2), 'yyyy-MM-dd'),
+          endDate,
+        ]);
+        const availableDates = dates.filter(d => !reservedDates.has(d));
 
-      // ✅ Sort chapters in declared order, NOT importance
-      const chaptersForSubject = subject.chapters.map(ch =>
-        sortedChapters.find(c => c.subject === subject.subject && c.title === ch.chapterTitle)!
-      );
-      let dateIdx = 0;
+        const subjectChapters = chapters.filter(c => c.subject === subject.subject);
+        const totalWeight = subjectChapters.reduce((sum, ch) => sum + ch.weight, 0);
 
-      const dailyChapterMap: Record<string, Record<string, { start: number; end: number }>> = {};
+        const daySlices: Record<string, number> = {};
+        for (const ch of subjectChapters) {
+          const ratio = ch.weight / totalWeight;
+          daySlices[ch.title] = Math.max(1, Math.round(ratio * availableDates.length));
+        }
 
-      for (const chapter of chaptersForSubject) {
-        let remaining = chapter.contentVolume;
-        const pagesPerDay = Math.max(1, Math.ceil(chapter.contentVolume / chapter.estimatedDays));
-        let pageStart = 1;
-
-        while (remaining > 0 && dateIdx < usableDates.length) {
-          const date = usableDates[dateIdx];
-          for (let s = 0; s < maxPerDay && remaining > 0; s++) {
-            const pageEnd = Math.min(pageStart + pagesPerDay - 1, chapter.contentVolume);
-            if (!dailyChapterMap[date]) dailyChapterMap[date] = {};
-            if (!dailyChapterMap[date][chapter.title]) {
-              dailyChapterMap[date][chapter.title] = { start: pageStart, end: pageEnd };
-            } else {
-              dailyChapterMap[date][chapter.title].end = pageEnd;
-            }
-            remaining -= (pageEnd - pageStart + 1);
+        let dateIdx = 0;
+        for (const ch of subjectChapters) {
+          const sliceDays = daySlices[ch.title];
+          const pagesPerDay = Math.ceil(ch.contentVolume / sliceDays);
+          let pageStart = 1;
+          for (let i = 0; i < sliceDays; i++) {
+            if (dateIdx >= availableDates.length) break;
+            const date = availableDates[dateIdx++];
+            const pageEnd = Math.min(ch.contentVolume, pageStart + pagesPerDay - 1);
+            plans.push({ subject: subject.subject, date, content: `${ch.title} (p.${pageStart}-${pageEnd})` });
             pageStart = pageEnd + 1;
           }
-          dateIdx++;
         }
       }
+    } else {
+      const calendar: Record<string, { subject: string; content: string }[]> = {};
+      for (const subject of subjects) {
+        const dates = subjectDateMap[subject.subject];
+        const endDate = dates[dates.length - 1];
+        const reservedDates = new Set([
+          format(subDays(new Date(endDate), 1), 'yyyy-MM-dd'),
+          format(subDays(new Date(endDate), 2), 'yyyy-MM-dd'),
+          endDate,
+        ]);
+        const availableDates = dates.filter(d => !reservedDates.has(d));
 
-      for (const [date, chapterMap] of Object.entries(dailyChapterMap)) {
-        for (const [title, { start, end }] of Object.entries(chapterMap)) {
-          plans.push({ subject: subject.subject, date, content: `${title} (p.${start}-${end})` });
+        const subjectChapters = chapters.filter(c => c.subject === subject.subject);
+        const totalWeight = subjectChapters.reduce((sum, ch) => sum + ch.weight, 0);
+
+        const daySlices: Record<string, number> = {};
+        for (const ch of subjectChapters) {
+          const ratio = ch.weight / totalWeight;
+          daySlices[ch.title] = Math.max(1, Math.round(ratio * availableDates.length));
+        }
+
+        let dateIdx = 0;
+        for (const ch of subjectChapters) {
+          const sliceDays = daySlices[ch.title];
+          const pagesPerDay = Math.ceil(ch.contentVolume / sliceDays);
+          let pageStart = 1;
+          for (let i = 0; i < sliceDays; i++) {
+            if (dateIdx >= availableDates.length) break;
+            const date = availableDates[dateIdx++];
+            const pageEnd = Math.min(ch.contentVolume, pageStart + pagesPerDay - 1);
+            if (!calendar[date]) calendar[date] = [];
+            calendar[date].push({ subject: subject.subject, content: `${ch.title} (p.${pageStart}-${pageEnd})` });
+            pageStart = pageEnd + 1;
+          }
         }
       }
-
-      const usedDates = plans.filter(p => p.subject === subject.subject).map(p => p.date);
-      const remainingDates = usableDates.filter(d => !usedDates.includes(d));
-      const highPriorityChapters = [...subject.chapters].sort((a, b) => b.difficulty - a.difficulty);
-      let rIdx = 0;
-
-      for (const date of remainingDates) {
-        const reviewChapter = highPriorityChapters[rIdx % highPriorityChapters.length];
-        plans.push({ subject: subject.subject, date, content: `복습: ${reviewChapter.chapterTitle}` });
-        rIdx++;
+      for (const [date, items] of Object.entries(calendar)) {
+        for (const item of items) plans.push({ ...item, date });
       }
     }
-
 
     plans.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     return plans;
