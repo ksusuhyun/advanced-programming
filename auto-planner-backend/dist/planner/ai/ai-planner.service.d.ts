@@ -14,6 +14,7 @@ export declare class AiPlannerService {
     private mergePageRanges;
     private estimateDaysByDifficulty;
     private assignChaptersSmart;
+    private difficultyRank;
     private mapResponseForClient;
     private groupDailyPlansBySubject;
     private mergeSubjects;

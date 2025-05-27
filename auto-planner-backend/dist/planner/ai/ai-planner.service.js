@@ -107,6 +107,7 @@ let AiPlannerService = class AiPlannerService {
     assignChaptersSmart(chapters, subjects, subjectDateMap, sessionsPerDay, style) {
         const plans = [];
         const calendar = {};
+        const sessionPlan = {};
         for (const subject of subjects) {
             const dates = subjectDateMap[subject.subject];
             const endDate = dates[dates.length - 1];
@@ -119,13 +120,11 @@ let AiPlannerService = class AiPlannerService {
             const subjectChapters = chapters.filter(c => c.subject === subject.subject);
             const totalWeight = subjectChapters.reduce((sum, ch) => sum + ch.weight, 0);
             const totalSessions = availableDates.length * sessionsPerDay;
-            const weightPerSession = totalWeight / totalSessions;
-            const sessionPlan = {};
             let dateIdx = 0;
             for (const ch of subjectChapters) {
-                let remainingPages = ch.contentVolume;
+                let remaining = ch.contentVolume;
                 let currentPage = 1;
-                while (remainingPages > 0 && dateIdx < availableDates.length) {
+                while (remaining > 0 && dateIdx < availableDates.length) {
                     const date = availableDates[dateIdx];
                     if (style === 'focus' && calendar[date] && calendar[date] !== subject.subject) {
                         dateIdx++;
@@ -136,25 +135,23 @@ let AiPlannerService = class AiPlannerService {
                         dateIdx++;
                         continue;
                     }
-                    const pagePerSession = Math.max(1, Math.ceil((ch.contentVolume * ch.weight) / totalWeight / totalSessions * ch.contentVolume));
-                    const endPage = Math.min(currentPage + pagePerSession - 1, ch.contentVolume);
-                    const content = `${ch.title} (p.${currentPage}-${endPage})`;
+                    const sessionSize = Math.min(remaining, Math.ceil(ch.weight / totalWeight * totalSessions));
+                    const pageEnd = Math.min(currentPage + sessionSize - 1, ch.contentVolume);
                     plans.push({
                         subject: subject.subject,
                         date,
-                        content,
+                        content: `${ch.title} (p.${currentPage}-${pageEnd})`,
                     });
                     calendar[date] = subject.subject;
                     sessionPlan[date] = usedSessions + 1;
-                    const pagesCovered = endPage - currentPage + 1;
-                    currentPage = endPage + 1;
-                    remainingPages -= pagesCovered;
+                    const consumed = pageEnd - currentPage + 1;
+                    remaining -= consumed;
+                    currentPage = pageEnd + 1;
                 }
             }
             const assignedDates = new Set(plans.filter(p => p.subject === subject.subject).map(p => p.date));
             const remainingDates = availableDates.filter(d => !assignedDates.has(d));
-            const difficultyOrder = { '쉬움': 1, '보통': 2, '어려움': 3 };
-            const sortedChapters = [...subjectChapters].sort((a, b) => difficultyOrder[b.difficulty] - difficultyOrder[a.difficulty]);
+            const sortedChapters = [...subjectChapters].sort((a, b) => this.difficultyRank(b.difficulty) - this.difficultyRank(a.difficulty));
             let ri = 0;
             for (const date of remainingDates) {
                 const ch = sortedChapters[ri % sortedChapters.length];
@@ -164,6 +161,9 @@ let AiPlannerService = class AiPlannerService {
         }
         plans.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         return plans;
+    }
+    difficultyRank(diff) {
+        return { '쉬움': 1, '보통': 2, '어려움': 3 }[diff] || 2;
     }
     mapResponseForClient(results) {
         return results.map(({ subject, startDate, endDate, dailyPlan, userId, databaseId }) => ({
