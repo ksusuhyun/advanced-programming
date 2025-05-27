@@ -16,9 +16,9 @@ exports.PlannerController = void 0;
 const common_1 = require("@nestjs/common");
 const planner_service_1 = require("./planner.service");
 const confirm_plan_dto_1 = require("./dto/confirm-plan.dto");
-const jwt_auth_guard_1 = require("src/auth/jwt-auth.guard");
+const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const swagger_1 = require("@nestjs/swagger");
-const notion_token_store_1 = require("src/auth/notion-token.store");
+const notion_token_store_1 = require("../auth/notion-token.store");
 let PlannerController = class PlannerController {
     plannerService;
     constructor(plannerService) {

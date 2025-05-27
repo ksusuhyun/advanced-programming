@@ -15,7 +15,7 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const client_1 = require("@notionhq/client");
 const date_fns_1 = require("date-fns");
-const notion_token_store_1 = require("src/auth/notion-token.store");
+const notion_token_store_1 = require("../auth/notion-token.store");
 let NotionService = NotionService_1 = class NotionService {
     configService;
     logger = new common_1.Logger(NotionService_1.name);

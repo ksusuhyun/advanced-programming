@@ -11,7 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PlannerService = void 0;
 const common_1 = require("@nestjs/common");
-const notion_service_1 = require("src/notion/notion.service");
+const notion_service_1 = require("../notion/notion.service");
 const date_fns_1 = require("date-fns");
 let PlannerService = class PlannerService {
     notionService;
