@@ -1,5 +1,4 @@
 {
-  // "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "module": "commonjs",
     "declaration": true,
@@ -12,10 +11,9 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
-      // "*": ["*"],
-      // "exam/*": ["exam/*"],
       "src/*": ["src/*"]
     },
+    "lib": ["ES2023", "DOM", "ESNext"],
     "incremental": true,
     "skipLibCheck": true,
     "strictNullChecks": true,
