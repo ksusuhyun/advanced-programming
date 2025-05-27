@@ -32,7 +32,7 @@ let AiPlannerService = class AiPlannerService {
         const { exams } = await this.examService.findByUser(userId);
         const databaseId = this.configService.get('DATABASE_ID');
         if (!preference || !exams || !databaseId) {
-            throw new common_1.InternalServerErrorException('❌ 필요한 데이터 누락');
+            throw new common_1.InternalServerErrorException('❌ 아직 필요한 데이터 남아있음');
         }
         const mergedSubjects = this.mergeSubjects(exams);
         const estimates = this.estimateDaysByDifficulty(mergedSubjects);
@@ -40,6 +40,10 @@ let AiPlannerService = class AiPlannerService {
         const rawPlans = this.assignChaptersSmartMulti(estimates, mergedSubjects, subjectDateMap, preference.sessionsPerDay);
         const results = this.groupDailyPlansBySubject(userId, databaseId, mergedSubjects, rawPlans);
         for (const result of results) {
+            const formattedEndDate = (0, date_fns_1.format)(new Date(result.endDate), 'yyyy-MM-dd');
+            const reviewDate = (0, date_fns_1.format)((0, date_fns_1.subDays)(new Date(result.endDate), 1), 'yyyy-MM-dd');
+            result.dailyPlan.push(`${reviewDate}: 복습: 전체 복습`);
+            result.dailyPlan.push(`${formattedEndDate}: 📝 시험일: ${result.subject}`);
             await this.notionService.syncToNotion(result);
         }
         return this.mapResponseForClient(results);
@@ -118,7 +122,6 @@ let AiPlannerService = class AiPlannerService {
         for (const subject of subjects) {
             const chapterTitles = subject.chapters.map(c => c.chapterTitle);
             const validDates = subjectDateMap[subject.subject];
-            const lastDate = validDates[validDates.length - 1];
             for (let i = 0; i < validDates.length; i++) {
                 const date = validDates[i];
                 const hasPlan = schedule[date]?.plans.some(p => p.subject === subject.subject);
@@ -127,7 +130,6 @@ let AiPlannerService = class AiPlannerService {
                     plans.push({ subject: subject.subject, date, content: `복습: ${reviewTarget}` });
                 }
             }
-            plans.push({ subject: subject.subject, date: lastDate, content: `📝 시험일: ${subject.subject}` });
         }
         for (const date of Object.keys(schedule)) {
             for (const item of schedule[date].plans) {
@@ -158,8 +160,8 @@ let AiPlannerService = class AiPlannerService {
                 groupedBySubject[subjectKey] = {
                     userId,
                     subject: subjectKey,
-                    startDate: matched.startDate.toString(),
-                    endDate: matched.endDate.toString(),
+                    startDate: (0, date_fns_1.format)(new Date(matched.startDate), 'yyyy-MM-dd'),
+                    endDate: (0, date_fns_1.format)(new Date(matched.endDate), 'yyyy-MM-dd'),
                     dailyPlan: [],
                     databaseId,
                 };
@@ -168,11 +170,11 @@ let AiPlannerService = class AiPlannerService {
             const date = item.date;
             const fullContent = item.content;
             const chapterTitle = fullContent.split(' (')[0];
-            const pageRange = fullContent.match(/\\(p\\.(\\d+)-(\\d+)\\)/);
+            const pageRange = fullContent.match(/\(p\.(\d+)-(\d+)\)/);
             const existingIdx = dailyPlan.findIndex(entry => entry.startsWith(`${date}: ${chapterTitle}`));
             if (existingIdx !== -1 && pageRange) {
                 const existing = dailyPlan[existingIdx];
-                const existingPage = existing.match(/\\(p\\.(\\d+)-(\\d+)\\)/);
+                const existingPage = existing.match(/\(p\.(\d+)-(\d+)\)/);
                 if (existingPage) {
                     const minPage = Math.min(Number(existingPage[1]), Number(pageRange[1]));
                     const maxPage = Math.max(Number(existingPage[2]), Number(pageRange[2]));

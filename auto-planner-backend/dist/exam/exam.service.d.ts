@@ -6,6 +6,16 @@ export declare class ExamService {
     create(exam: CreateExamDto): Promise<{
         message: string;
         data: {
+            chapters: {
+                id: number;
+                createdAt: Date;
+                chapterTitle: string;
+                difficulty: string;
+                contentVolume: number;
+                updatedAt: Date;
+                examId: number;
+            }[];
+        } & {
             userId: number;
             id: number;
             createdAt: Date;
@@ -24,7 +34,7 @@ export declare class ExamService {
                 createdAt: Date;
                 chapterTitle: string;
                 difficulty: string;
-                contentVolume: string;
+                contentVolume: number;
                 updatedAt: Date;
                 examId: number;
             }[];
@@ -45,7 +55,7 @@ export declare class ExamService {
             createdAt: Date;
             chapterTitle: string;
             difficulty: string;
-            contentVolume: string;
+            contentVolume: number;
             updatedAt: Date;
             examId: number;
         }[];
