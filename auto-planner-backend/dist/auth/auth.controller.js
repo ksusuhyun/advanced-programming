@@ -31,6 +31,7 @@ let AuthController = class AuthController {
         const clientId = process.env.NOTION_CLIENT_ID;
         const redirectUri = process.env.NOTION_REDIRECT_URI;
         const state = `user-${userId}`;
+        console.log('🔧 사용 중인 redirectUri:', redirectUri);
         const notionOAuthUrl = `https://api.notion.com/v1/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&owner=user`;
         console.log(notionOAuthUrl);
         return res.send(notionOAuthUrl);
@@ -59,6 +60,9 @@ let AuthController = class AuthController {
             const access_token = tokenResponse.data.access_token;
             const workspace_id = tokenResponse.data.workspace_id;
             const userId = state.replace('user-', '');
+            console.log('✅ [콜백 진입]');
+            console.log('🟡 저장할 userId:', userId);
+            console.log('🟡 저장할 token:', access_token);
             (0, notion_token_store_1.saveToken)(userId, access_token);
             console.log('✅ saveToken 실행됨!');
             console.log(`[✅ Notion 연동 완료] userId: ${userId}, token: ${access_token}`);

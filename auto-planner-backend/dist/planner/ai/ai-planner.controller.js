@@ -22,7 +22,7 @@ let AiPlannerController = class AiPlannerController {
         this.aiPlannerService = aiPlannerService;
     }
     async generatePlan(body) {
-        return this.aiPlannerService.generateStudyPlan(body.userId);
+        return await this.aiPlannerService.generateStudyPlan(body.userId, body.databaseId);
     }
 };
 exports.AiPlannerController = AiPlannerController;
@@ -35,11 +35,15 @@ __decorate([
     (0, swagger_1.ApiBody)({
         schema: {
             type: 'object',
-            required: ['userId'],
+            required: ['userId', 'databaseId'],
             properties: {
                 userId: {
                     type: 'string',
                     example: '202255150',
+                },
+                databaseId: {
+                    type: 'string',
+                    example: 'notion-db-id',
                 },
             },
         },

@@ -5,6 +5,7 @@ import { ExamService } from '../../exam/exam.service';
 import { SyncToNotionDto } from '../../notion/dto/sync-to-notion.dto';
 import { NotionService } from '../../notion/notion.service';
 import { eachDayOfInterval, format, subDays } from 'date-fns';
+import { getToken,saveToken } from 'src/auth/notion-token.store';
 
 interface Chapter {
   chapterTitle: string;
@@ -38,10 +39,14 @@ export class AiPlannerService {
     private readonly notionService: NotionService,
   ) {}
 
-  async generateStudyPlan(userId: string): Promise<SyncToNotionDto[]> {
+  async generateStudyPlan(userId: string, databaseIdOverride?: string): Promise<SyncToNotionDto[]> {
+    const token = getToken(userId);
+    if (!token) {
+      throw new InternalServerErrorException(`❌ Notion 토큰 없음: userId=${userId}`);
+    }
     const preference = await this.userPreferenceService.findByUserId(userId);
     const { exams } = await this.examService.findByUser(userId);
-    const databaseId = this.configService.get<string>('DATABASE_ID');
+    const databaseId = databaseIdOverride || this.configService.get<string>('DATABASE_ID');
     if (!preference || !exams || !databaseId) {
       throw new InternalServerErrorException('❌ 아직 필요한 데이터 남아있음');
     }
@@ -61,6 +66,9 @@ export class AiPlannerService {
       result.dailyPlan.push(`${review2}: 복습: 전체 챕터 복습`);
       result.dailyPlan.push(`${formattedEndDate}: 📝 시험일: ${result.subject}`);
 
+      if (!result.userId || !result.databaseId) {
+        throw new Error('❌ Notion 연동 실패: userId 또는 databaseId가 누락되었습니다.')
+      }
       await this.notionService.syncToNotion(result);
     }
 
@@ -86,7 +94,7 @@ export class AiPlannerService {
     }
     return subjectDateMap;
   }
-  // 클래스 내부 메서드로 선언
+
   private mergePageRanges(ranges: number[][]): number[][] {
     const sorted = ranges.sort((a, b) => a[0] - b[0]);
     const merged: number[][] = [];
@@ -130,8 +138,6 @@ export class AiPlannerService {
     return result;
   }
 
-
-
   private assignChaptersSmart(
     chapters: EstimatedChapter[],
     subjects: Subject[],
@@ -140,8 +146,8 @@ export class AiPlannerService {
     style: 'focus' | 'multi'
   ): { subject: string; date: string; content: string }[] {
     const plans: { subject: string; date: string; content: string }[] = [];
-    const calendar: Record<string, string> = {};
-    const sessionPlan: Record<string, number> = {}; // date → 현재 세션 수
+    const calendar: Record<string, string> = {}; // focus: date -> subject
+    const sessionPlan: Record<string, number> = {}; // date -> session count
 
     for (const subject of subjects) {
       const dates = subjectDateMap[subject.subject];
@@ -158,25 +164,33 @@ export class AiPlannerService {
       const totalSessions = availableDates.length * sessionsPerDay;
 
       let dateIdx = 0;
+
       for (const ch of subjectChapters) {
         let remaining = ch.contentVolume;
         let currentPage = 1;
 
-        while (remaining > 0 && dateIdx < availableDates.length) {
-          const date = availableDates[dateIdx];
-
-          if (style === 'focus' && calendar[date] && calendar[date] !== subject.subject) {
-            dateIdx++;
-            continue;
+        while (remaining > 0) {
+          if (dateIdx >= availableDates.length) {
+            dateIdx = availableDates.length - 1;
           }
 
-          const usedSessions = sessionPlan[date] || 0;
+          const date = availableDates[dateIdx];
+
+          const usedSessions = sessionPlan[date] || 0; // ✅ 여기 선언
+
+          if (style === 'focus') {
+            if (calendar[date] && calendar[date] !== subject.subject) {
+              dateIdx++;
+              continue;
+            }
+          }
+
           if (usedSessions >= sessionsPerDay) {
             dateIdx++;
             continue;
           }
 
-          const sessionSize = Math.min(remaining, Math.ceil(ch.weight / totalWeight * totalSessions)); // adaptive
+          const sessionSize = Math.min(remaining, Math.ceil(ch.weight / totalWeight * totalSessions));
           const pageEnd = Math.min(currentPage + sessionSize - 1, ch.contentVolume);
 
           plans.push({
@@ -191,10 +205,10 @@ export class AiPlannerService {
           const consumed = pageEnd - currentPage + 1;
           remaining -= consumed;
           currentPage = pageEnd + 1;
+          dateIdx++;
         }
       }
 
-      // 남은 날짜에 복습 추가
       const assignedDates = new Set(plans.filter(p => p.subject === subject.subject).map(p => p.date));
       const remainingDates = availableDates.filter(d => !assignedDates.has(d));
       const sortedChapters = [...subjectChapters].sort((a, b) =>
@@ -214,10 +228,8 @@ export class AiPlannerService {
   }
 
   private difficultyRank(diff: '쉬움' | '보통' | '어려움'): number {
-  return { '쉬움': 1, '보통': 2, '어려움': 3 }[diff] || 2;
-}
-
-
+    return { '쉬움': 1, '보통': 2, '어려움': 3 }[diff] || 2;
+  }
 
   private mapResponseForClient(results: SyncToNotionDto[]): any[] {
     return results.map(({ subject, startDate, endDate, dailyPlan, userId, databaseId }) => ({
@@ -237,29 +249,23 @@ export class AiPlannerService {
     rawPlans: { subject: string; date: string; content: string }[],
   ): SyncToNotionDto[] {
     const groupedBySubject: Record<string, SyncToNotionDto> = {};
-
-    // 중복 챕터 범위 통합을 위한 임시 구조: {subject -> date -> chapterTitle -> [pageRange]}
     const pageMap: Record<string, Record<string, Record<string, number[][]>>> = {};
 
     for (const item of rawPlans) {
       const subjectKey = item.subject;
       const date = item.date;
-
-      // 챕터 제목과 페이지 추출
       const match = item.content.match(/^(.*) \(p\.(\d+)-(\d+)\)$/);
-      if (!match) continue; // 복습일 경우 등은 통합 X
+      if (!match) continue;
       const [_, chapterTitle, start, end] = match;
       const pStart = parseInt(start, 10);
       const pEnd = parseInt(end, 10);
 
-      // init
       pageMap[subjectKey] ??= {};
       pageMap[subjectKey][date] ??= {};
       pageMap[subjectKey][date][chapterTitle] ??= [];
       pageMap[subjectKey][date][chapterTitle].push([pStart, pEnd]);
     }
 
-    // 통합된 content 구성
     for (const subjectKey of Object.keys(pageMap)) {
       const matched = subjects.find(s => s.subject === subjectKey);
       if (!matched) throw new Error(`❌ 과목 일치 실패: ${subjectKey}`);
@@ -275,7 +281,6 @@ export class AiPlannerService {
       const dateMap = pageMap[subjectKey];
       for (const date of Object.keys(dateMap).sort()) {
         const chapterContents: string[] = [];
-
         for (const chapterTitle of Object.keys(dateMap[date])) {
           const ranges = dateMap[date][chapterTitle];
           const merged = this.mergePageRanges(ranges);
@@ -316,4 +321,3 @@ export class AiPlannerService {
     return Object.values(grouped);
   }
 }
-

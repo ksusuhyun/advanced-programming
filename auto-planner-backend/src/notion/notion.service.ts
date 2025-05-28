@@ -196,7 +196,6 @@ import { getToken } from 'src/auth/notion-token.store';
 import { SyncToNotionDto } from './dto/sync-to-notion.dto';
 
 
-
 @Injectable()
 export class NotionService {
   private readonly logger = new Logger(NotionService.name);

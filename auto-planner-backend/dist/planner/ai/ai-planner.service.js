@@ -16,6 +16,7 @@ const user_preference_service_1 = require("../../user-preference/user-preference
 const exam_service_1 = require("../../exam/exam.service");
 const notion_service_1 = require("../../notion/notion.service");
 const date_fns_1 = require("date-fns");
+const notion_token_store_1 = require("../../auth/notion-token.store");
 let AiPlannerService = class AiPlannerService {
     configService;
     userPreferenceService;
@@ -27,10 +28,14 @@ let AiPlannerService = class AiPlannerService {
         this.examService = examService;
         this.notionService = notionService;
     }
-    async generateStudyPlan(userId) {
+    async generateStudyPlan(userId, databaseIdOverride) {
+        const token = (0, notion_token_store_1.getToken)(userId);
+        if (!token) {
+            throw new common_1.InternalServerErrorException(`❌ Notion 토큰 없음: userId=${userId}`);
+        }
         const preference = await this.userPreferenceService.findByUserId(userId);
         const { exams } = await this.examService.findByUser(userId);
-        const databaseId = this.configService.get('DATABASE_ID');
+        const databaseId = databaseIdOverride || this.configService.get('DATABASE_ID');
         if (!preference || !exams || !databaseId) {
             throw new common_1.InternalServerErrorException('❌ 아직 필요한 데이터 남아있음');
         }
@@ -47,6 +52,9 @@ let AiPlannerService = class AiPlannerService {
             result.dailyPlan.push(`${review1}: 복습: 전체 챕터 복습`);
             result.dailyPlan.push(`${review2}: 복습: 전체 챕터 복습`);
             result.dailyPlan.push(`${formattedEndDate}: 📝 시험일: ${result.subject}`);
+            if (!result.userId || !result.databaseId) {
+                throw new Error('❌ Notion 연동 실패: userId 또는 databaseId가 누락되었습니다.');
+            }
             await this.notionService.syncToNotion(result);
         }
         return this.mapResponseForClient(results);
@@ -124,13 +132,18 @@ let AiPlannerService = class AiPlannerService {
             for (const ch of subjectChapters) {
                 let remaining = ch.contentVolume;
                 let currentPage = 1;
-                while (remaining > 0 && dateIdx < availableDates.length) {
-                    const date = availableDates[dateIdx];
-                    if (style === 'focus' && calendar[date] && calendar[date] !== subject.subject) {
-                        dateIdx++;
-                        continue;
+                while (remaining > 0) {
+                    if (dateIdx >= availableDates.length) {
+                        dateIdx = availableDates.length - 1;
                     }
+                    const date = availableDates[dateIdx];
                     const usedSessions = sessionPlan[date] || 0;
+                    if (style === 'focus') {
+                        if (calendar[date] && calendar[date] !== subject.subject) {
+                            dateIdx++;
+                            continue;
+                        }
+                    }
                     if (usedSessions >= sessionsPerDay) {
                         dateIdx++;
                         continue;
@@ -147,6 +160,7 @@ let AiPlannerService = class AiPlannerService {
                     const consumed = pageEnd - currentPage + 1;
                     remaining -= consumed;
                     currentPage = pageEnd + 1;
+                    dateIdx++;
                 }
             }
             const assignedDates = new Set(plans.filter(p => p.subject === subject.subject).map(p => p.date));

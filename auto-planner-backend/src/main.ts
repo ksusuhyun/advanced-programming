@@ -64,8 +64,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  // ✅ 테스트용 Notion 토큰 등록
-  saveToken('a', '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');  
+  // // ✅ 테스트용 Notion 토큰 등록
+  // saveToken('a', '.');  
 
   // ✅ Render 호환을 위한 포트 설정
   await app.listen(process.env.PORT || 4523, '0.0.0.0');
