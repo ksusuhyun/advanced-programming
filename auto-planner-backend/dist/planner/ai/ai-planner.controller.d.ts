@@ -5,5 +5,6 @@ export declare class AiPlannerController {
     constructor(aiPlannerService: AiPlannerService);
     generatePlan(body: {
         userId: string;
+        databaseId?: string;
     }): Promise<SyncToNotionDto[]>;
 }

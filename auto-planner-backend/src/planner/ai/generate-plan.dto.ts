@@ -22,4 +22,7 @@ export class GeneratePlanDto {
 
   @ApiProperty({ example: '집중 잘 되는 아침형' })
   studyPreference: string;
+
+  @ApiProperty({ example: '...' })
+  DATABASE_ID: string;
 }

@@ -16,11 +16,15 @@ export class AiPlannerController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['userId'],
+      required: ['userId', 'databaseId'],
       properties: {
         userId: {
           type: 'string',
           example: '202255150',
+        },
+        databaseId: {
+          type: 'string',
+          example: 'notion-db-id',
         },
       },
     },
@@ -45,7 +49,9 @@ export class AiPlannerController {
       },
     },
   })
-  async generatePlan(@Body() body: { userId: string }): Promise<SyncToNotionDto[]> {
-    return this.aiPlannerService.generateStudyPlan(body.userId);
+  async generatePlan(
+    @Body() body: { userId: string; databaseId?: string },
+  ): Promise<SyncToNotionDto[]> {
+    return await this.aiPlannerService.generateStudyPlan(body.userId, body.databaseId);
   }
 }

@@ -9,7 +9,7 @@ export declare class AiPlannerService {
     private readonly examService;
     private readonly notionService;
     constructor(configService: ConfigService, userPreferenceService: UserPreferenceService, examService: ExamService, notionService: NotionService);
-    generateStudyPlan(userId: string): Promise<SyncToNotionDto[]>;
+    generateStudyPlan(userId: string, databaseIdOverride?: string): Promise<SyncToNotionDto[]>;
     private getStudyDatesBySubject;
     private mergePageRanges;
     private estimateDaysByDifficulty;
