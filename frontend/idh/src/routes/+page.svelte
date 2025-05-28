@@ -77,19 +77,23 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: 1rem; /* 모바일에서 여백 */
   }
+
 
   .login-box {
     background: white;
     padding: 2rem;
-    width: 400px;
-    height: 650px;
+    width: 100%;
+    max-width: 400px;
+    height: auto;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     text-align: center;
     display: flex;
     flex-direction: column;
   }
+
 
   .icon-wrapper {
     width: 96px;
@@ -178,6 +182,25 @@
     cursor: pointer;
     margin-top: 0.25rem;
   }
+
+  @media (max-width: 480px) {
+  .login-box {
+    padding: 1.25rem;
+  }
+
+  .login-box h2 {
+    font-size: 1.125rem;
+  }
+
+  .login-box p {
+    font-size: 0.8rem;
+  }
+
+  button {
+    font-size: 0.95rem;
+  }
+}
+
 </style>
 
 <div class="wrapper">
