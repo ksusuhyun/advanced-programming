@@ -2,9 +2,9 @@
   import { onMount } from 'svelte';
   import Header from '$lib/components/Header.svelte';
   import SubjectForm from '$lib/components/SubjectForm.svelte';
-  import { User } from 'lucide-svelte';
   import { deleteAllExams } from '$lib/api/exam';
   import { checkNotionConnected } from '$lib/api/notion';
+  import { confirmPlan } from '$lib/api/confirm';
   import { goto } from '$app/navigation';
 
   const token = sessionStorage.getItem('token');
@@ -79,19 +79,34 @@
 
   async function handleCreatePlan() {
     try {
-      const isConnected = await checkNotionConnected();
-
-      if (!isConnected) {
-        alert('⚠️ 노션 연동이 필요합니다. 연동 페이지로 이동합니다.');
-        goto('/main');
+      const databaseId = prompt('📌 노션 데이터베이스 ID를 입력하세요:');
+      if (!databaseId) {
+        alert('❗ 데이터베이스 ID가 입력되지 않았습니다.');
         return;
       }
 
-      // ✅ 연동된 경우 계속 진행
-      console.log('✅ 최종 계획:', subjects);
-      // 👉 실제 저장 API 호출 및 페이지 이동은 여기에 구현
+      for (const subject of subjects) {
+        const payload = {
+          userId,
+          subject: '고급 프로그래밍',
+          startDate: '2025-06-01',
+          endDate: '2025-06-15',
+          dailyPlan: [
+            "6/1: Chapter 1",
+            "6/2: Chapter 2"
+          ],
+          databaseId
+        };
+
+        await confirmPlan(userId, payload);
+      }
+
+      alert('✅ 노션에 학습 계획이 성공적으로 전송되었습니다.');
+      goto('/main');
+
     } catch (err) {
-      alert(`노션 연동 상태 확인 중 오류 발생: ${err.message}`);
+      alert('❗ 노션 연동이 필요합니다. 메인 화면에서 연동을 먼저 진행해주세요.');
+      goto('/main');
     }
   }
 </script>
