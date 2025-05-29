@@ -4,6 +4,8 @@
   import SubjectForm from '$lib/components/SubjectForm.svelte';
 	import { User } from 'lucide-svelte';
   import { deleteAllExams } from '$lib/api/exam';
+  import { checkNotionConnected } from '$lib/api/notion'; 
+  import { goto } from '$app/navigation'; 
 
   const token = sessionStorage.getItem('token');
   const userId = sessionStorage.getItem('userId');
@@ -78,9 +80,22 @@ async function resetSubjects() {
     }
   }
 
-  function handleCreatePlan() {
-    console.log('✅ 최종 계획:', subjects);
-    // TODO: API 호출 또는 페이지 이동
+  async function handleCreatePlan() {
+    try {
+      const isConnected = await checkNotionConnected();
+
+      if (!isConnected) {
+        alert('⚠️ 노션 연동이 필요합니다. 연동 페이지로 이동합니다.');
+        goto('/main'); // ✅ 노션 연동 버튼 있는 페이지로 이동
+        return;
+      }
+
+      // ✅ 노션 연동되어 있다면 계속 진행
+      console.log('✅ 최종 계획:', subjects);
+      // 여기서 계획 저장 로직 이어가면 됨
+    } catch (err) {
+      alert(`노션 연동 상태 확인 중 오류 발생: ${err.message}`);
+    }
   }
 </script>
 
