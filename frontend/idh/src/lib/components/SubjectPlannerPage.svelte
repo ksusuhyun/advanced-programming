@@ -2,17 +2,16 @@
   import { onMount } from 'svelte';
   import Header from '$lib/components/Header.svelte';
   import SubjectForm from '$lib/components/SubjectForm.svelte';
-	import { User } from 'lucide-svelte';
+  import { User } from 'lucide-svelte';
   import { deleteAllExams } from '$lib/api/exam';
-  import { checkNotionConnected } from '$lib/api/notion'; 
-  import { goto } from '$app/navigation'; 
+  import { checkNotionConnected } from '$lib/api/notion';
+  import { goto } from '$app/navigation';
 
   const token = sessionStorage.getItem('token');
   const userId = sessionStorage.getItem('userId');
 
   let subjects = [];
 
-  // ✅ 저장된 과목 불러오기
   onMount(async () => {
     try {
       const res = await fetch(`https://advanced-programming.onrender.com/exam/${userId}`);
@@ -27,43 +26,41 @@
           startDate: exam.startDate.slice(0, 10),
           endDate: exam.endDate.slice(0, 10),
           importance: exam.importance,
-          units: exam.chapters.map(ch => ({
+          units: exam.chapters.map((ch) => ({
             unitName: ch.chapterTitle,
             studyAmount: String(ch.contentVolume),
             difficulty: ch.difficulty,
-          }))
+          })),
         }));
       }
     } catch (err) {
       console.error(err);
-      subjects = [getEmptySubject()]; // 오류 시 빈 폼 하나라도 렌더링
+      subjects = [getEmptySubject()];
     }
   });
 
-  // ✅ 빈 과목 양식 생성 함수
   function getEmptySubject() {
     return {
       subjectName: '',
       startDate: '',
       endDate: '',
       importance: 3,
-      units: [{ unitName: '', studyAmount: '', difficulty: '난이도 선택' }]
+      units: [{ unitName: '', studyAmount: '', difficulty: '난이도 선택' }],
     };
   }
 
-async function resetSubjects() {
-  const ok = confirm('⚠️ 모든 과목 정보를 삭제하고 초기화할까요?');
-  if (!ok) return;
+  async function resetSubjects() {
+    const ok = confirm('⚠️ 모든 과목 정보를 삭제하고 초기화할까요?');
+    if (!ok) return;
 
-  try {
-    await deleteAllExams(userId, token); // ✅ DB 전체 삭제
-    subjects = [getEmptySubject()];      // ✅ 화면 초기화
-    alert('✅ 모든 과목이 초기화되었습니다.');
-  } catch (err) {
-    alert(`❌ 초기화 실패: ${err.message}`);
+    try {
+      await deleteAllExams(userId, token);
+      subjects = [getEmptySubject()];
+      alert('✅ 모든 과목이 초기화되었습니다.');
+    } catch (err) {
+      alert(`❌ 초기화 실패: ${err.message}`);
+    }
   }
-}
-
 
   function handleSubjectChange(index, updatedSubject) {
     subjects[index] = { ...updatedSubject };
@@ -86,19 +83,18 @@ async function resetSubjects() {
 
       if (!isConnected) {
         alert('⚠️ 노션 연동이 필요합니다. 연동 페이지로 이동합니다.');
-        goto('/main'); // ✅ 노션 연동 버튼 있는 페이지로 이동
+        goto('/main');
         return;
       }
 
-      // ✅ 노션 연동되어 있다면 계속 진행
+      // ✅ 연동된 경우 계속 진행
       console.log('✅ 최종 계획:', subjects);
-      // 여기서 계획 저장 로직 이어가면 됨
+      // 👉 실제 저장 API 호출 및 페이지 이동은 여기에 구현
     } catch (err) {
       alert(`노션 연동 상태 확인 중 오류 발생: ${err.message}`);
     }
   }
 </script>
-
 
 <div class="page-wrapper">
   <Header />
@@ -110,7 +106,7 @@ async function resetSubjects() {
           subjectData={subject}
           onChange={handleSubjectChange}
           onRemove={removeSubject}
-          token={token} 
+          token={token}
           userId={userId}
         />
       {/each}
@@ -119,6 +115,7 @@ async function resetSubjects() {
         <button class="wide-button add-subject-btn" on:click={addSubject}>+ 과목 추가</button>
         <button class="wide-button reset-subject-btn" on:click={resetSubjects}>↺ 초기화</button>
       </div>
+
       <button class="create-plan-btn" on:click={handleCreatePlan}>학습 계획 생성하기</button>
     </div>
   </main>
@@ -130,7 +127,7 @@ async function resetSubjects() {
     flex-direction: column;
     min-height: 100vh;
     background-color: #f3f4f6;
-    overflow-x: hidden; /* ✅ 가로 스크롤 제거 */
+    overflow-x: hidden;
   }
 
   .content-area {
@@ -149,24 +146,9 @@ async function resetSubjects() {
     gap: 24px;
   }
 
-  .add-subject-btn,
-  .create-plan-btn {
-    font-family: 'Inter', sans-serif;
-    font-size: 16px;
-    height: 56px;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-
-  .add-subject-btn {
-    background-color: #ffffff;
-    color: #374151;
-    border: 1px solid #d1d5db;
-  }
-
   .button-pair {
     display: flex;
-    gap: 16px; /* 두 버튼 사이 간격 */
+    gap: 16px;
   }
 
   .wide-button {
@@ -179,14 +161,12 @@ async function resetSubjects() {
     border: none;
   }
 
-  /* 과목 추가 버튼 */
   .add-subject-btn {
     background-color: #ffffff;
     color: #374151;
     border: 1px solid #d1d5db;
   }
 
-  /* 초기화 버튼 */
   .reset-subject-btn {
     background-color: #f87171;
     color: #ffffff;
@@ -197,7 +177,6 @@ async function resetSubjects() {
     background-color: #ef4444;
   }
 
-  /* 생성 버튼 */
   .create-plan-btn {
     width: 100%;
     margin-top: 20px;
@@ -210,8 +189,6 @@ async function resetSubjects() {
     border-radius: 12px;
     cursor: pointer;
   }
-
-
 
   :global(body) {
     margin: 0;
