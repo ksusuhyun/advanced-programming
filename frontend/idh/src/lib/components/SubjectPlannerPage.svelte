@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte';
   import Header from '$lib/components/Header.svelte';
   import SubjectForm from '$lib/components/SubjectForm.svelte';
@@ -11,6 +11,17 @@
   const userId = sessionStorage.getItem('userId');
 
   let subjects = [];
+  
+
+  function extractDatabaseId(input: string): string | null {
+    try {
+      const url = new URL(input);
+      const path = url.pathname.replace(/\//g, '');
+      return path || null;
+    } catch (e) {
+      return input.includes('?') ? input.split('?')[0] : input;
+    }
+  }
 
   onMount(async () => {
     try {
@@ -79,9 +90,15 @@
 
   async function handleCreatePlan() {
     try {
-      const databaseId = prompt('📌 노션 데이터베이스 ID를 입력하세요:');
+      const input = prompt('📌 노션 데이터베이스 **주소나 ID**를 입력하세요:');
+      if (!input) {
+        alert('❗ 입력이 취소되었습니다.');
+        return;
+      }
+
+      const databaseId = extractDatabaseId(input);
       if (!databaseId) {
-        alert('❗ 데이터베이스 ID가 입력되지 않았습니다.');
+        alert('❗ 유효한 노션 주소 또는 ID가 아닙니다.');
         return;
       }
 
@@ -90,7 +107,7 @@
           userId,
           subject: '고급 프로그래밍',
           startDate: '2025-06-01',
-          endDate: '2025-06-15',
+          endDate:'2025-06-15',
           dailyPlan: [
             "6/1: Chapter 1",
             "6/2: Chapter 2"
@@ -109,6 +126,7 @@
       goto('/main');
     }
   }
+
 </script>
 
 <div class="page-wrapper">
