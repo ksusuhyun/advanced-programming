@@ -13,7 +13,7 @@
   async function handleLogin() {
     try {
       const result = await login({ userId, password });
-      sessionStorage.setItem('token', result.access_token);
+      sessionStorage.setItem('token', result.token);     
       sessionStorage.setItem('userId', result.userId);
       loginError = false;
       goto('/main');

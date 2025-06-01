@@ -94,17 +94,9 @@ async function checkDuplicate() {
     }
 
     // ✅ 비밀번호 유효성 검사 추가
-    if (!validatePassword(password)) {
-      passwordError = true;
-      passwordTouched = true;
-      modalMessage = '비밀번호 조건을 확인해주세요.';
-      showModal = true;
-      return;
-    }
-
-    if (duplicateStatus !== 'available') {
-      missingField = null;
-      modalMessage = '아이디 중복 확인을 해주세요.';
+    if (password !== confirmPassword) {
+      passwordMismatch = true;
+      modalMessage = '비밀번호가 일치하지 않습니다. 다시 확인해주세요.';
       showModal = true;
       return;
     }
