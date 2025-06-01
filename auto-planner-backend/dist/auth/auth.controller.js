@@ -28,7 +28,7 @@ let AuthController = class AuthController {
         const { access_token } = await this.authService.login(dto);
         res.cookie('access_token', access_token, {
             httpOnly: true,
-            secure: false,
+            secure: true,
             sameSite: 'lax',
         });
         return { success: true };

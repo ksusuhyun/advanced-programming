@@ -6,13 +6,23 @@ export declare class ExamService {
     create(exam: CreateExamDto): Promise<{
         message: string;
         data: {
-            userId: number;
+            chapters: {
+                id: number;
+                createdAt: Date;
+                updatedAt: Date;
+                examId: number;
+                chapterTitle: string;
+                difficulty: number;
+                contentVolume: number;
+            }[];
+        } & {
             id: number;
-            createdAt: Date;
             subject: string;
             startDate: Date;
             endDate: Date;
             importance: number;
+            userId: number;
+            createdAt: Date;
             updatedAt: Date;
         };
     }>;
@@ -22,20 +32,20 @@ export declare class ExamService {
             chapters: {
                 id: number;
                 createdAt: Date;
+                updatedAt: Date;
+                examId: number;
                 chapterTitle: string;
                 difficulty: number;
                 contentVolume: number;
-                updatedAt: Date;
-                examId: number;
             }[];
         } & {
-            userId: number;
             id: number;
-            createdAt: Date;
             subject: string;
             startDate: Date;
             endDate: Date;
             importance: number;
+            userId: number;
+            createdAt: Date;
             updatedAt: Date;
         })[];
     }>;
@@ -43,20 +53,20 @@ export declare class ExamService {
         chapters: {
             id: number;
             createdAt: Date;
+            updatedAt: Date;
+            examId: number;
             chapterTitle: string;
             difficulty: number;
             contentVolume: number;
-            updatedAt: Date;
-            examId: number;
         }[];
     } & {
-        userId: number;
         id: number;
-        createdAt: Date;
         subject: string;
         startDate: Date;
         endDate: Date;
         importance: number;
+        userId: number;
+        createdAt: Date;
         updatedAt: Date;
     }) | null>;
     deleteExamWithChaptersByUser(userId: string, subject: string): Promise<{

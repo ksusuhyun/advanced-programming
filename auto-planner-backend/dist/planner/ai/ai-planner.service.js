@@ -85,8 +85,7 @@ let AiPlannerService = class AiPlannerService {
                 'Content-Type': 'application/json'
             }
         });
-        const text = response.data.choices?.[0]?.text || '';
-        const jsonMatch = text.match(/\[.*\]/s);
+        const jsonMatch = 0;
         if (!jsonMatch) {
             throw new Error('❌ JSON 응답 파싱 실패');
         }

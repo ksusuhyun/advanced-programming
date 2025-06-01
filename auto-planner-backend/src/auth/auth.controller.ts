@@ -19,7 +19,8 @@ export class AuthController {
 
     res.cookie('access_token', access_token, {
       httpOnly: true,
-      secure: false, // 로컬에서는 false, HTTPS 배포 시 true
+      // secure: false, // 로컬에서는 false
+      secure: true, // HTTPS 배포 시
       sameSite: 'lax',
     });
 

@@ -88,6 +88,7 @@ export class AiPlannerService {
 
     const text = response.data.choices?.[0]?.text || '';
     const jsonMatch = text.match(/\[.*\]/s);
+    
 
     if (!jsonMatch) {
       throw new Error('❌ JSON 응답 파싱 실패');
