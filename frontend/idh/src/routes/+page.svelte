@@ -304,9 +304,9 @@
             tabindex="-1"
           >
             {#if showPassword}
-              <Eye size={20} />
-            {:else}
               <EyeOff size={20} />
+            {:else}
+              <Eye size={20} />
             {/if}
           </button>
         </div>
