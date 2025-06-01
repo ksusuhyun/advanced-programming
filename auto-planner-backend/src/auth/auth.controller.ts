@@ -24,7 +24,7 @@ export class AuthController {
       sameSite: 'lax',
     });
 
-    return { success: true };
+    return access_token;
   }
 
   // // ✅ 1. 로그인 (JWT 발급)
